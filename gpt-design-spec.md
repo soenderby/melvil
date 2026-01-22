@@ -26,11 +26,11 @@ Melvil guides *what* to read and *why* — not *do the learning for the user*.
 
 ## 2. Problem Statement
 
-In the modern information landscape, individuals are exposed to a **vast and continuously expanding volume of content** from books, articles, reports, web pages, and other sources. This phenomenon, commonly referred to as *information overload*, occurs when the amount of available information exceeds the ability of an individual to process and make sense of it. Information overload has been linked to reduced decision-making quality, cognitive strain, and decreased productivity. :contentReference[oaicite:1]{index=1}
+In the modern information landscape, individuals are exposed to a **vast and continuously expanding volume of content** from books, articles, reports, web pages, and other sources. 
 
-Information overload is not limited to digital media; it has long been recognized historically in scholarly contexts where the sheer growth of books and texts made it challenging for readers to even identify what is worth reading. Melvil confronts this enduring challenge with modern tools, helping users prioritize reading efforts and make informed decisions about *what parts of a text matter most* for their specific goals.
+Information overload makes it challenging for readers to even identify what is worth reading. Melvil confronts this enduring challenge with modern tools, helping users prioritize reading efforts and make informed decisions about *what sources are most releveant* and *what parts of a text matter most* for their specific goals.
 
-Classic reading pedagogy — such as that articulated in *How to Read a Book* — emphasizes that effective reading is **purposeful and goal-oriented**, advocating for different modes of reading depending on the task (e.g., inspectional, analytical, syntopical). However, while these methodologies offer a framework for engaging with texts, readers still lack technological support to operationalize such strategies over large and heterogeneous reading lists. :contentReference[oaicite:2]{index=2}
+Classic reading pedagogy — such as that articulated in *How to Read a Book* — emphasizes that effective reading is **purposeful and goal-oriented**, advocating for different modes of reading depending on the task (e.g., inspectional, analytical, syntopical). Melvil aims to provide technological support to operationalize such strategies over large and heterogeneous reading lists.
 
 Thus, the core problem Melvil aims to address is:
 

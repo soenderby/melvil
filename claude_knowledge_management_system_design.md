@@ -24,9 +24,19 @@ The system is inspired by Mortimer Adler and Charles Van Doren's framework of re
 
 ---
 
-## 2. System Philosophy
+## 2. System Overview
 
-### 2.1 Adler's Four Levels of Reading (Mapped to System Features)
+The Learning-Directed Knowledge Management System serves as an intelligent intermediary between readers and the vast universe of available learning materials. At its core, the system maintains a structured knowledge graph that maps concepts, their prerequisite relationships, and the materials that teach them. When a user adds a book or article to the system, it automatically extracts metadata, generates multi-level summaries, identifies the concepts covered, and determines the depth of coverage for each. This creates a rich, queryable representation of each material that goes far beyond simple bibliographic data—it captures what the material actually teaches and how thoroughly it teaches it.
+
+Users interact with the system primarily through learning goals: statements of what they want to understand and how deeply. A goal like "understand distributed systems at a working level" triggers the system to identify the relevant concepts, map the user's current knowledge state against those concepts, discover any prerequisite gaps, and generate a prioritized reading plan. Critically, this plan doesn't just recommend whole books—it identifies specific chapters or sections most relevant to the goal, enabling the kind of targeted, purposeful reading that Adler and Van Doren advocated. The system continuously tracks the user's evolving knowledge state, updating its recommendations as the user progresses.
+
+The system also serves as an intelligent holding pen for serendipitous discoveries. When users encounter interesting materials they don't have time to evaluate immediately—a book mentioned in a podcast, an article shared by a colleague—they can quickly add these to an interest queue with contextual notes. The system processes these materials in the background and later surfaces them when they become relevant to active learning goals. This transforms the anxiety of an ever-growing reading list into a curated, context-aware resource that serves the user's actual learning journey rather than overwhelming it.
+
+---
+
+## 3. System Philosophy
+
+### 3.1 Adler's Four Levels of Reading (Mapped to System Features)
 
 | Level | Description | System Support |
 |-------|-------------|----------------|
@@ -35,7 +45,7 @@ The system is inspired by Mortimer Adler and Charles Van Doren's framework of re
 | **Analytical** | Deep reading for understanding | **Learning path generation, prerequisite mapping** |
 | **Syntopical** | Reading multiple books on one subject | **Cross-book concept graphs, topic synthesis** |
 
-### 2.2 Design Principles
+### 3.2 Design Principles
 
 1. **The system does not replace reading**—it directs attention to what's worth reading
 2. **Books have specific purposes**—not all require cover-to-cover reading
@@ -45,7 +55,7 @@ The system is inspired by Mortimer Adler and Charles Van Doren's framework of re
 
 ---
 
-## 3. High-Level Architecture
+## 4. High-Level Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────┐
@@ -94,9 +104,9 @@ The system is inspired by Mortimer Adler and Charles Van Doren's framework of re
 
 ---
 
-## 4. Data Models
+## 5. Data Models
 
-### 4.1 Knowledge Graph Schema (Neo4j)
+### 5.1 Knowledge Graph Schema (Neo4j)
 
 ```cypher
 // === CORE NODE TYPES ===
@@ -210,7 +220,7 @@ The system is inspired by Mortimer Adler and Charles Van Doren's framework of re
 }]->(:Material)
 ```
 
-### 4.2 Python Data Classes
+### 5.2 Python Data Classes
 
 ```python
 from dataclasses import dataclass, field
@@ -331,9 +341,9 @@ class ReadingRecommendation:
 
 ---
 
-## 5. Core Services
+## 6. Core Services
 
-### 5.1 Material Ingestion Pipeline
+### 6.1 Material Ingestion Pipeline
 
 This pipeline processes new materials and extracts structured information.
 
@@ -533,7 +543,7 @@ class GoogleBooksFetcher(MetadataFetcher):
         }
 ```
 
-### 5.2 Summarization Service
+### 6.2 Summarization Service
 
 Uses LLMs with hierarchical/map-reduce strategies for long documents.
 
@@ -763,7 +773,7 @@ Summary:"""
         return result
 ```
 
-### 5.3 Concept Extractor & Knowledge Graph Builder
+### 6.3 Concept Extractor & Knowledge Graph Builder
 
 ```python
 from neo4j import GraphDatabase
@@ -1040,7 +1050,7 @@ class Neo4jStore:
             return [dict(record) for record in result]
 ```
 
-### 5.4 Relevance Engine
+### 6.4 Relevance Engine
 
 Determines how relevant a material is to a user's learning goals.
 
@@ -1245,7 +1255,7 @@ class RelevanceEngine:
         return chapter_scores
 ```
 
-### 5.5 User Knowledge State Tracker
+### 6.5 User Knowledge State Tracker
 
 ```python
 from datetime import datetime, timedelta
@@ -1386,9 +1396,9 @@ class UserKnowledgeTracker:
 
 ---
 
-## 6. Recommendation Engine
+## 7. Recommendation Engine
 
-### 6.1 Main Recommendation Logic
+### 7.1 Main Recommendation Logic
 
 ```python
 from dataclasses import dataclass
@@ -1606,9 +1616,9 @@ class RecommendationEngine:
 
 ---
 
-## 7. User Interface Flows
+## 8. User Interface Flows
 
-### 7.1 Key User Journeys
+### 8.1 Key User Journeys
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
@@ -1687,7 +1697,7 @@ class RecommendationEngine:
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
-### 7.2 CLI Interface Example
+### 8.2 CLI Interface Example
 
 ```python
 # Example CLI for the system
@@ -1795,9 +1805,9 @@ if __name__ == '__main__':
 
 ---
 
-## 8. Technology Stack Recommendations
+## 9. Technology Stack Recommendations
 
-### 8.1 Core Stack
+### 9.1 Core Stack
 
 | Component | Technology | Rationale |
 |-----------|------------|-----------|
@@ -1807,7 +1817,7 @@ if __name__ == '__main__':
 | **Backend** | Python + FastAPI | Async support, type hints, ecosystem |
 | **Embeddings** | OpenAI Ada-002 or Voyage | High quality text embeddings |
 
-### 8.2 Python Dependencies
+### 9.2 Python Dependencies
 
 ```toml
 # pyproject.toml
@@ -1854,7 +1864,7 @@ dev = [
 ]
 ```
 
-### 8.3 Project Structure
+### 9.3 Project Structure
 
 ```
 learning-knowledge-system/
@@ -1906,7 +1916,7 @@ learning-knowledge-system/
 
 ---
 
-## 9. Implementation Phases
+## 10. Implementation Phases
 
 ### Phase 1: Foundation (Weeks 1-3)
 - [ ] Set up project structure and dependencies
@@ -1934,15 +1944,13 @@ learning-knowledge-system/
 
 ---
 
-## 10. Future Enhancements
+## 11. Future Enhancements
 
-1. **Social Features**: Share reading lists, see what others learning X read
-2. **Spaced Repetition Integration**: Connect to Anki for concept review
-3. **Full-Text Search**: Index actual book content (if available)
-4. **Reading Time Optimization**: AI-assisted skimming suggestions
-5. **Learning Analytics**: Track learning velocity, identify patterns
-6. **Multi-Modal**: Support video courses, podcasts, papers
-7. **Export**: Generate personalized syllabi, reading lists
+1. **Spaced Repetition Integration**: Connect to Anki for concept review
+2. **Full-Text Search**: Index actual book content (if available)
+3. **Reading Time Optimization**: AI-assisted skimming suggestions
+4. **Learning Analytics**: Track learning velocity, identify patterns
+5. **Export**: Generate personalized syllabi, reading lists
 
 ---
 
@@ -1986,7 +1994,3 @@ Provide:
 4. PREREQUISITES_ASSUMED: knowledge the book assumes
 5. RECOMMENDATION: brief advice on how to read this book for this goal
 ```
-
----
-
-*This design document provides a comprehensive blueprint for building a learning-directed knowledge management system. The architecture is modular, allowing incremental implementation while maintaining a clear vision for the complete system.*
