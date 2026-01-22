@@ -1,7 +1,7 @@
 # Melvil  
 **Design Specification Document**
 
-**Version:** 0.1.0  
+**Version:** 0.1.1  
 **Date:** 2026-01-22
 
 ---
@@ -24,9 +24,25 @@ Melvil guides *what* to read and *why* — not *do the learning for the user*.
 
 ---
 
-## 2. System Overview
+## 2. Problem Statement
 
-### 2.1 High-Level Architecture
+In the modern information landscape, individuals are exposed to a **vast and continuously expanding volume of content** from books, articles, reports, web pages, and other sources. This phenomenon, commonly referred to as *information overload*, occurs when the amount of available information exceeds the ability of an individual to process and make sense of it. Information overload has been linked to reduced decision-making quality, cognitive strain, and decreased productivity. :contentReference[oaicite:1]{index=1}
+
+Information overload is not limited to digital media; it has long been recognized historically in scholarly contexts where the sheer growth of books and texts made it challenging for readers to even identify what is worth reading. Melvil confronts this enduring challenge with modern tools, helping users prioritize reading efforts and make informed decisions about *what parts of a text matter most* for their specific goals.
+
+Classic reading pedagogy — such as that articulated in *How to Read a Book* — emphasizes that effective reading is **purposeful and goal-oriented**, advocating for different modes of reading depending on the task (e.g., inspectional, analytical, syntopical). However, while these methodologies offer a framework for engaging with texts, readers still lack technological support to operationalize such strategies over large and heterogeneous reading lists. :contentReference[oaicite:2]{index=2}
+
+Thus, the core problem Melvil aims to address is:
+
+> **Readers have access to more potential material than they can realistically read, and lack tools to systematically assess, prioritize, and navigate content based on their individual learning goals, existing knowledge, and time constraints.**
+
+Melvil’s goal is to mitigate the effects of information overload by providing structured support for reading prioritization, context-aware recommendations, and directed learning planning.
+
+---
+
+## 3. System Overview
+
+### 3.1 High-Level Architecture
 Melvil consists of three primary subsystems:
 
 1. **Ingestion & Semantic Enrichment**
@@ -42,9 +58,9 @@ Melvil consists of three primary subsystems:
 
 ---
 
-## 3. Requirements
+## 4. Requirements
 
-### 3.1 Functional Requirements
+### 4.1 Functional Requirements
 - **F1: Source Import & Normalization** — Support EPUB, PDF, text, and web articles.
 - **F2: Semantic Processing** — Extract concepts and generate semantic representations.
 - **F3: Knowledge Graph Construction** — Map entities and relationships across sources.
@@ -54,9 +70,9 @@ Melvil consists of three primary subsystems:
 
 ---
 
-## 4. Data Model
+## 5. Data Model
 
-### 4.1 Core Entities
+### 5.1 Core Entities
 
 #### a. Document Structure
 | Entity           | Description |
@@ -75,20 +91,20 @@ Melvil consists of three primary subsystems:
 
 ---
 
-## 5. Architectural Components
+## 6. Architectural Components
 
-### 5.1 Ingestion Layer
+### 6.1 Ingestion Layer
 Responsible for parsing files, extracting table of contents (TOC), and chunking content into manageable units.
 
-### 5.2 Semantic Enrichment Pipeline
+### 6.2 Semantic Enrichment Pipeline
 - Extract entities and concepts using NLP.
 - Normalize concept names.
 - Create vector embeddings for semantic search.
 
-### 5.3 Knowledge Graph Module
+### 6.3 Knowledge Graph Module
 Stores relationships between entities (concepts, content chunks, works, etc.) and supports expanded retrieval. Knowledge graphs provide **semantic context and relationships** that enrich recommendations beyond flat semantic search.
 
-### 5.4 Retrieval + Recommendation Engine
+### 6.4 Retrieval + Recommendation Engine
 Combines:
 
 - **Hybrid retrieval** (semantic + keyword + graph traversal)
@@ -97,21 +113,21 @@ Combines:
 
 ---
 
-## 6. Interfaces & APIs
+## 7. Interfaces & APIs
 
-### 6.1 Input Interfaces
+### 7.1 Input Interfaces
 - File upload endpoints (multiple formats)
 - APIs for importing external sources (e.g., Zotero, Calibre)
 - UI for specifying learning goals and preferences
 
-### 6.2 Search & Recommendation API
+### 7.2 Search & Recommendation API
 Typical endpoints:
 
 - `/recommend` — returns a ranked reading plan
 - `/concepts` — exposes the user’s concept map
 - `/progress` — updates the user’s learning state
 
-### 6.3 Feedback Loop
+### 7.3 Feedback Loop
 Users provide feedback on:
 
 - Sections read or skipped
@@ -122,16 +138,16 @@ Feedback updates the user profile and influences future recommendations.
 
 ---
 
-## 7. Recommendation Strategy
+## 8. Recommendation Strategy
 
-### 7.1 Reading Modes
+### 8.1 Reading Modes
 Melvil supports three primary reading modes:
 
 1. **Inspectional** — high-level skims using TOC and summaries
 2. **Analytical** — deeper engagement with prerequisite awareness
 3. **Syntopical** — context across sources via graph clusters
 
-### 7.2 Scoring Metrics
+### 8.2 Scoring Metrics
 - **Semantic Fit** — alignment of content with user goals
 - **Effort** — estimated reading time and cognitive effort
 - **Novelty** — difference from what the user has already seen
@@ -139,7 +155,7 @@ Melvil supports three primary reading modes:
 
 ---
 
-## 8. Build Plan & Milestones
+## 9. Build Plan & Milestones
 
 | Milestone | Deliverable |
 |-----------|-------------|
@@ -152,20 +168,20 @@ Melvil supports three primary reading modes:
 
 ---
 
-## 9. Testing & Evaluation
+## 10. Testing & Evaluation
 
-### 9.1 Unit Tests
+### 10.1 Unit Tests
 - Validate parsers, semantic extraction, and data structures
 
-### 9.2 Integration Tests
+### 10.2 Integration Tests
 - End-to-end tests: file upload → ingestion → recommendation
 
-### 9.3 User Validation
+### 10.3 User Validation
 - Validate that Melvil’s recommendations help users achieve learning goals more efficiently
 
 ---
 
-## 10. Non-Functional Requirements
+## 11. Non-Functional Requirements
 
 | Category        | Requirement |
 |-----------------|-------------|
@@ -176,7 +192,7 @@ Melvil supports three primary reading modes:
 
 ---
 
-## 11. Glossary
+## 12. Glossary
 - **Knowledge Graph** — structured network of entities and relationships  
 - **ContentChunk** — a text unit used for retrieval and recommendation  
 - **Hybrid Retrieval** — a blend of semantic embedding, keyword search, and graph traversal
@@ -184,6 +200,6 @@ Melvil supports three primary reading modes:
 ---
 
 ## References
-- Best practices for technical design documents
-- Knowledge graph + retrieval integration literature
-
+- Research on information overload, its causes and effects. :contentReference[oaicite:3]{index=3}  
+- Studies on coping strategies and information management. :contentReference[oaicite:4]{index=4}  
+- Reading methodology guided by Adler and Van Doren’s *How to Read a Book*. :contentReference[oaicite:5]{index=5}
