@@ -80,6 +80,20 @@ A thorough examination of weaknesses, questionable assumptions, and alternative 
 
 ---
 
+### 1.6 Semantic Archive Gaps
+
+The new orientation doc highlights anti-patterns that the current design risks:
+
+- **Premature ontology freezing**: Concept normalization and goal schemas may ossify too early.
+- **Overconfident summarization**: Summaries risk being treated as authoritative despite thin provenance.
+- **Single-mode interaction**: CLI-first design under-serves browsing, inspecting, and assembling.
+- **Relevance as a black box**: Scores without explanations undermine trust.
+- **Forgetting time**: Overwriting summaries and concepts loses evolution of meaning.
+
+**Implication**: Without explicit provenance, temporal versioning, and multi-mode workflows, Melvil undermines its semantic archive goals.
+
+---
+
 ## 2. User Experience Problems
 
 ### 2.1 The Enrichment Bottleneck

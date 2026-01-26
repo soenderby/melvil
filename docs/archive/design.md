@@ -104,6 +104,19 @@ Your library becomes a map you can navigate.
 
 ---
 
+## Design Orientation: Semantic Archive
+
+Melvil is not just a recommender. It is a **semantic archive**: a system that preserves sources, captures meaning in multiple forms, and helps users recompute relevance as their questions change.
+
+Guiding principles:
+1. **Capture first, structure progressively.** Preserve raw sources; let structure evolve.
+2. **Pluralism of representations.** Text, metadata, embeddings, graphs, and notes coexist.
+3. **Provenance and inspectability.** Every derived artifact links back to sources and timestamps.
+4. **Retrieval as a process.** Support iterative sensemaking, not one-shot answers.
+5. **Uncertainty and disagreement.** Competing interpretations are preserved, not flattened.
+
+---
+
 ## The System in One Diagram
 
 ```
@@ -285,6 +298,8 @@ melvil concepts [<query>]          # Browse concepts
 melvil path --to <concept>         # Show learning path
 ```
 
+Melvil supports multiple modes: **asking**, **browsing**, **inspecting**, **assembling**, and **contributing**. The CLI should make it easy to move between them without losing provenance or context.
+
 ### Design Principles
 
 1. **Nouns are titles, not IDs.** `melvil show "DDIA"` not `melvil show abc123`
@@ -295,6 +310,16 @@ melvil path --to <concept>         # Show learning path
 ---
 
 ## Data Architecture
+
+### Layered Semantic Stack
+
+- **Layer 0: Immutable sources** (PDFs, notes, metadata snapshots)
+- **Layer 1: Metadata and facets** (authors, dates, domains, projects)
+- **Layer 2: IR index** (FTS for precise, auditable retrieval)
+- **Layer 3: Embeddings** (semantic recall and discovery)
+- **Layer 4: Structured meaning** (claims, arguments, term definitions)
+
+Meaning emerges from **interaction between layers**, not any single representation.
 
 ### The Simple Version (Phase 1-3)
 
@@ -369,7 +394,7 @@ When you add a book, Melvil:
 2. **Generates summaries** via Claude (3-sentence, detailed, thesis)
 3. **Extracts concepts** as tags
 4. **Creates embeddings** for semantic search
-5. **Stores everything** in SQLite
+5. **Stores everything** in SQLite with provenance, timestamps, and model version
 
 ```python
 # What happens inside
@@ -390,11 +415,18 @@ async def enrich(material):
     material.summary_short = parse(response, 'SHORT_SUMMARY')
     material.concepts = parse(response, 'KEY_CONCEPTS')
     material.embedding = embed(material.summary_short)
+    material.provenance = {
+        "summary_short": "llm:claude",
+        "concepts": "llm:claude",
+        "embedding": "openai:text-embedding-3-small",
+    }
 
     save(material)
 ```
 
 **Cost**: ~$0.01-0.03 per book (metadata-only enrichment).
+
+**Rule**: Summaries orient; sources decide. All outputs are inspectable and reversible.
 
 ---
 
@@ -468,6 +500,8 @@ Don't build these until you need them.
 
 5. **Track detailed notes.** That's what Zotero, Obsidian, and similar tools are for.
 
+6. **Hide why results appear.** Relevance and summaries always link back to sources and provenance.
+
 ---
 
 ## Success Looks Like
@@ -525,6 +559,7 @@ melvil search "distributed"
 ### Phase 1: The Librarian (Week 1-2)
 - [ ] SQLite schema and core data models
 - [ ] Zotero local database sync
+- [ ] Source snapshots + provenance tracking
 - [ ] Open Library metadata fetching
 - [ ] Claude summarization (basic)
 - [ ] CLI: add, sync, list, show, search
@@ -567,9 +602,12 @@ CREATE TABLE materials (
     thesis TEXT,
     concepts JSON,
     embedding BLOB,
+    provenance JSON,  -- per-field sources + model versions
+    confidence JSON,  -- optional confidence scores
 
     zotero_key TEXT UNIQUE,
     content_path TEXT,  -- path to PDF if available
+    source_snapshot_id TEXT,  -- immutable snapshot reference
 
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     enriched_at TIMESTAMP
@@ -584,7 +622,9 @@ CREATE TABLE chapters (
     page_end INTEGER,
     summary TEXT,
     concepts JSON,
-    embedding BLOB
+    embedding BLOB,
+    provenance JSON,
+    confidence JSON
 );
 
 CREATE TABLE goals (

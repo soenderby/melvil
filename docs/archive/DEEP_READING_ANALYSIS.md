@@ -14,6 +14,17 @@ But the real target user is different:
 
 ---
 
+## Semantic Archive Alignment
+
+This revised direction aligns with the semantic archive principles:
+- **Capture first, structure progressively**: store passages and notes before formalizing arguments.
+- **Pluralism of representations**: keep text, glossaries, argument maps, and annotations side by side.
+- **Provenance and inspectability**: every extracted claim links back to the exact passage.
+- **Retrieval as a process**: syntheses evolve through iterative questions, not one-shot queries.
+- **Uncertainty and disagreement**: competing interpretations are preserved, not flattened.
+
+---
+
 ## What Adler Actually Meant
 
 ### Analytical Reading (Single Work, Deep Understanding)
@@ -229,6 +240,8 @@ CREATE TABLE annotations (
     annotation_type TEXT,  -- 'key_term', 'argument', 'question', 'connection'
     your_note TEXT,
 
+    provenance JSON,  -- source snapshot, model/version if auto-extracted
+    confidence REAL,
     created_at TIMESTAMP
 );
 ```
@@ -243,7 +256,23 @@ CREATE TABLE term_definitions (
     material_id TEXT REFERENCES materials(id),
     definition TEXT,
     passage_location TEXT,  -- where they define it
-    your_understanding TEXT  -- your synthesis
+    your_understanding TEXT,  -- your synthesis
+    provenance JSON,
+    confidence REAL
+);
+```
+
+### Competing Interpretations
+```sql
+-- Preserve disagreement and evolution of meaning over time
+CREATE TABLE interpretations (
+    id TEXT PRIMARY KEY,
+    topic TEXT NOT NULL,  -- e.g., "CAP theorem implications"
+    material_id TEXT REFERENCES materials(id),
+    stance TEXT,  -- author's position or your summary
+    evidence_passages JSON,  -- passage ids or locations
+    created_at TIMESTAMP,
+    superseded_by TEXT  -- optional link to newer interpretation
 );
 ```
 
@@ -492,6 +521,7 @@ $ melvil synthesize "consensus algorithms"
 2. **Passage-level embeddings** - Semantic search at paragraph level, not book level
 3. **Citation/page tracking** - Must link back to exact locations
 4. **Incremental annotation** - Add notes as you read, not just after
+5. **Provenance + temporal snapshots** - Preserve source context and evolution
 
 ### Nice to Have
 

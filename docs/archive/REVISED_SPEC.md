@@ -4,6 +4,19 @@
 
 ---
 
+## 0. Semantic Archive Principles
+
+This spec is aligned with the semantic archive orientation:
+1. **Capture first, structure progressively**
+2. **Pluralism of representations** (TOC, text, concepts, notes)
+3. **Provenance and inspectability**
+4. **Retrieval as a process**
+5. **Uncertainty and disagreement are preserved**
+
+Summaries and blurbs **orient**; sources decide.
+
+---
+
 ## 1. Core Value Proposition
 
 Melvil helps you quickly scan *what you want to read* and decide where to focus by providing:
@@ -41,7 +54,7 @@ $ melvil toc "DDIA"
 ...
 ```
 
-### 3.2 Clarifying Blurms for Vague Titles
+### 3.2 Clarifying Blurbs for Vague Titles
 - Detect vague titles (e.g., "Foundations", "Overview", "Discussion").
 - Generate 1-2 sentence summaries using nearby TOC context or extracted chapter text.
 - Mark provenance (metadata-derived vs. text-derived vs. user-edited).
@@ -79,6 +92,13 @@ Database Internals ch. 11
 Paxos Made Simple (section 2)
 ```
 
+### 3.5 Interaction Modes (Process-Oriented Retrieval)
+- **Asking**: quick queries for a concept or chapter.
+- **Browsing**: navigate TOCs, facets, and concept clusters.
+- **Inspecting**: open source passages and metadata snapshots.
+- **Assembling**: collect excerpts into a working outline.
+- **Contributing**: correct blurbs and concepts, add notes.
+
 ---
 
 ## 4. Non-Goals (MVP)
@@ -87,6 +107,7 @@ Paxos Made Simple (section 2)
 - Deep passage retrieval or argument extraction.
 - Chapter guidance without available text/metadata.
 - Web UI or browser extension.
+- Black-box summaries without provenance.
 
 ---
 
@@ -98,27 +119,31 @@ materials (id, type, title, authors, year, zotero_key, source_path)
 materials_status (material_id, status, updated_at) -- status: to_read|reading|read
 
 chapters (id, material_id, number, title, level, parent_id)
-chapter_blurbs (id, chapter_id, blurb, provenance, user_confirmed)
+chapter_blurbs (id, chapter_id, blurb, provenance, confidence, user_confirmed, created_at)
 
 concepts (id, name, normalized)
-chapter_concepts (chapter_id, concept_id, confidence, user_confirmed)
-material_concepts (material_id, concept_id, confidence, user_confirmed)
+chapter_concepts (chapter_id, concept_id, confidence, provenance, user_confirmed, created_at)
+material_concepts (material_id, concept_id, confidence, provenance, user_confirmed, created_at)
+
+source_snapshots (id, material_id, captured_at, source_type, source_ref, hash)
 ```
 
 ### 5.2 Provenance
 - `provenance` values: `metadata`, `pdf_text`, `llm`, `user`.
 - Every blurb and concept includes provenance and optional `user_confirmed`.
+- Preserve prior versions; new generations append, not overwrite.
 
 ---
 
 ## 6. Ingestion Pipeline
 
 1. **Sync metadata** from Zotero.
-2. **Capture TOC** from metadata if present.
-3. **Fallback extraction** from PDF text if TOC missing.
-4. **Normalize chapters** into a consistent tree.
-5. **Generate blurbs** for vague titles when text is available.
-6. **Extract concepts** per chapter and per book.
+2. **Capture source snapshot** (metadata + file hash) for provenance.
+3. **Capture TOC** from metadata if present.
+4. **Fallback extraction** from PDF text if TOC missing.
+5. **Normalize chapters** into a consistent tree.
+6. **Generate blurbs** for vague titles when text is available.
+7. **Extract concepts** per chapter and per book.
 
 ---
 
@@ -154,6 +179,8 @@ Design rules:
 - **Sparse by default**: show blurbs only when they add clarity.
 - **Editable**: users can correct blurbs and concepts.
 - **Provenance visible**: always show data source.
+- **Uncertainty visible**: show confidence and allow disagreement.
+- **Time-aware**: keep historical versions and surface changes.
 
 ---
 
