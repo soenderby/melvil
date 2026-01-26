@@ -47,7 +47,6 @@ Summaries and derived outputs **orient**; sources decide.
 ## Interaction Modes
 
 Melvil supports multiple cognitive modes and smooth transitions between them:
-- **Asking**: natural language questions and follow-ups
 - **Browsing**: timelines, facets, clusters, TOCs
 - **Inspecting**: close reading of original sources
 - **Assembling**: synthesizing excerpts into narratives
@@ -133,6 +132,10 @@ synthesis_projects (
   current_thesis, key_insights_json, remaining_questions_json,
   status, created_at, updated_at
 )
+
+workspace_index (
+  id, synthesis_id, kind, text, created_at
+)
 ```
 
 Notes:
@@ -209,12 +212,15 @@ melvil terms "consistency"
 # Synthesis
 melvil synthesize "consistency models"
 melvil assemble "consistency models" --add "DDIA" --passages 12,13,14
+melvil synth capture "DDIA" --page 323-325 --type passage
+melvil synth find "consistency" --in "consistency models"
 ```
 
 CLI output must:
 - show provenance and confidence where relevant
 - preserve access to original passages
 - allow iterative refinement
+- surface source snapshot hash and page range in capture/edit flows
 
 ---
 
@@ -242,8 +248,10 @@ CLI output must:
 ### Phase 1: Synthesis Workspace (MVP)
 - Minimal ingest (metadata + optional text import)
 - Passage capture with stable references
+- Guided capture flow with optional PDF prefill
 - Workspace creation and assembly of excerpts
 - Provenance display for every excerpt
+- Workspace-scoped find across captured passages and notes
 
 ### Phase 2: Clarify + Correct
 - Correction loop for summaries and concepts

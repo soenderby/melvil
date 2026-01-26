@@ -93,7 +93,6 @@ Users engage with semantic archives to reduce cognitive friction under uncertain
 
 An effective system supports multiple cognitive modes:
 
-- **Asking**: natural language questions and follow-ups
 - **Browsing**: maps, timelines, clusters, and facets
 - **Inspecting**: close reading of original sources
 - **Assembling**: synthesizing excerpts into arguments or narratives
