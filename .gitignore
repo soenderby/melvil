@@ -1,7 +1,11 @@
 # Beads runtime state (not tracked)
 # Formulas ARE tracked for `go install @latest` - see bottom of file
+.beads/*
+!.beads/
+!.beads/README.md
+!.beads/config.yaml
+!.beads/issues.jsonl
 .beads/redirect
-.beads/issues.jsonl
 .beads/interactions.jsonl
 .beads/metadata.json
 .beads/mq/
@@ -10,8 +14,6 @@
 .beads/.sync.lock
 .beads/sync_base.jsonl
 .beads-wisp/
-
-.beads/
 .logs/
 logs/
 settings/
