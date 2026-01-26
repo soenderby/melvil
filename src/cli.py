@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import sqlite3
 from pathlib import Path
 from typing import Any
 
@@ -8,7 +9,7 @@ import click
 from rich.console import Console
 from rich.table import Table
 
-from src import db, export, toc
+from src import db, export, notes as notes_lib, toc, zotero
 from src.config import resolve_db_path
 from src.resolve import ResolutionError, resolve_book_id, resolve_concept_id
 
@@ -42,8 +43,21 @@ def _format_authors(raw: str | None) -> str:
 @click.argument("title")
 @click.option("--author", "authors", multiple=True, help="Author name (repeatable).")
 @click.option("--year", type=int)
-@click.option("--type", "book_type", default="book", show_default=True)
+@click.option(
+    "--type",
+    "book_type",
+    type=click.Choice(["book", "paper", "article"], case_sensitive=False),
+    default="book",
+    show_default=True,
+)
 @click.option("--from-zotero", is_flag=True, help="Import from Zotero.")
+@click.option(
+    "--zotero-db",
+    "zotero_db",
+    type=click.Path(path_type=Path),
+    default=None,
+    help="Path to zotero.sqlite (optional).",
+)
 @click.pass_context
 def add(
     ctx: click.Context,
@@ -52,9 +66,19 @@ def add(
     year: int | None,
     book_type: str,
     from_zotero: bool,
+    zotero_db: Path | None,
 ) -> None:
     if from_zotero:
-        raise click.ClickException("Zotero import not implemented yet.")
+        try:
+            book = zotero.create_book_from_zotero(
+                ctx.obj["conn"],
+                title=title,
+                zotero_db_path=zotero_db,
+            )
+        except (FileNotFoundError, ValueError, sqlite3.Error) as exc:
+            raise click.ClickException(str(exc)) from exc
+        console.print(f"Added: {book['title']}")
+        return
 
     conn = ctx.obj["conn"]
     authors_json = json.dumps(list(authors)) if authors else None
@@ -132,6 +156,10 @@ def show(ctx: click.Context, title: str) -> None:
 def list_books(ctx: click.Context, depth: str | None, concept_name: str | None) -> None:
     if depth and concept_name:
         raise click.ClickException("Use only one of --depth or --concept.")
+    if depth and depth not in DEPTH_LEVELS:
+        raise click.ClickException(
+            f"Depth must be one of: {', '.join(sorted(DEPTH_LEVELS))}."
+        )
 
     conn = ctx.obj["conn"]
     params: list[object] = []
@@ -175,6 +203,10 @@ def list_books(ctx: click.Context, depth: str | None, concept_name: str | None) 
 @click.pass_context
 def depth(ctx: click.Context, title: str, depth: str) -> None:
     conn = ctx.obj["conn"]
+    if depth not in DEPTH_LEVELS:
+        raise click.ClickException(
+            f"Depth must be one of: {', '.join(sorted(DEPTH_LEVELS))}."
+        )
     try:
         book_id, resolved = resolve_book_id(conn, title)
     except ResolutionError as exc:
@@ -252,6 +284,26 @@ def map(
     _map_overview(conn)
 
 
+@cli.command()
+@click.option("--focus", "focus_name", default=None, help="Focus on a concept.")
+@click.pass_context
+def viz(ctx: click.Context, focus_name: str | None) -> None:
+    conn = ctx.obj["conn"]
+    try:
+        from src import viz as viz_module
+    except ImportError as exc:
+        raise click.ClickException(
+            "Textual is required for visualization. Install it with `pip install textual`."
+        ) from exc
+
+    try:
+        viz_module.run_viz(conn, focus_name)
+    except ValueError as exc:
+        raise click.ClickException(str(exc)) from exc
+
+
+DEPTH_LEVELS = {"listed", "mapped", "reading", "read", "deep"}
+NOTE_TYPES = {"standard", "relation"}
 LINK_TYPES = {"related", "prerequisite", "contradicts", "specializes", "generalizes"}
 
 
@@ -617,6 +669,373 @@ def list_concepts(ctx: click.Context, book_title: str | None, orphan: bool) -> N
     table.add_column("Mentions", justify="right")
     for row in rows:
         table.add_row(row["name"], str(row["mentions"]))
+    console.print(table)
+
+
+@cli.group(
+    invoke_without_command=True,
+    context_settings={"allow_extra_args": True, "ignore_unknown_options": True},
+)
+@click.option("--book", "book_title", default=None, help="Book title or alias.")
+@click.option("--chapter", "chapter_ref", default=None, help="Chapter number or id.")
+@click.option("--concept", "concepts", multiple=True, help="Link to a concept.")
+@click.option(
+    "--type",
+    "note_type",
+    type=click.Choice(sorted(NOTE_TYPES), case_sensitive=False),
+    default="standard",
+    show_default=True,
+)
+@click.option("--location", "source_location", default=None, help="Source location.")
+@click.option("--title", "note_title", default=None, help="Optional note title.")
+@click.pass_context
+def note(
+    ctx: click.Context,
+    book_title: str | None,
+    chapter_ref: str | None,
+    concepts: tuple[str, ...],
+    note_type: str,
+    source_location: str | None,
+    note_title: str | None,
+) -> None:
+    if ctx.invoked_subcommand is not None:
+        return
+
+    text = " ".join(ctx.args).strip() if ctx.args else None
+    if not text:
+        text = click.edit("")
+        if text is None:
+            return
+        text = text.strip()
+
+    if not text:
+        raise click.ClickException("Note text is required.")
+
+    wikilink_names = notes_lib.parse_wikilinks(text)
+
+    conn = ctx.obj["conn"]
+    explicit_ids: list[int] = []
+    for concept_name in concepts:
+        try:
+            explicit_ids.append(notes_lib.resolve_or_create_concept_id(conn, concept_name))
+        except ResolutionError as exc:
+            raise click.ClickException(str(exc)) from exc
+
+    wikilink_ids = set()
+    for concept_name in wikilink_names:
+        try:
+            wikilink_ids.add(notes_lib.resolve_or_create_concept_id(conn, concept_name))
+        except ResolutionError as exc:
+            raise click.ClickException(str(exc)) from exc
+
+    if note_type == "standard" and len(set(explicit_ids) | wikilink_ids) > 1:
+        raise click.ClickException(
+            "Standard notes can link to at most one concept. Use --type relation."
+        )
+
+    book_id = None
+    chapter_id = None
+    if book_title:
+        try:
+            book_id, _ = resolve_book_id(conn, book_title)
+        except ResolutionError as exc:
+            raise click.ClickException(str(exc)) from exc
+    if chapter_ref:
+        if not book_id:
+            raise click.ClickException("--chapter requires --book.")
+        try:
+            chapter_id = toc.resolve_chapter_id(conn, book_id, chapter_ref)
+        except toc.TocError as exc:
+            raise click.ClickException(str(exc)) from exc
+
+    cursor = conn.execute(
+        """
+        INSERT INTO notes (
+            title, body, book_id, chapter_id, note_type, source_location, is_quote
+        ) VALUES (?, ?, ?, ?, ?, ?, 0)
+        """,
+        (
+            note_title,
+            text,
+            book_id,
+            chapter_id,
+            note_type,
+            source_location,
+        ),
+    )
+    note_id = int(cursor.lastrowid)
+
+    notes_lib.insert_note_concepts(
+        conn,
+        note_id=note_id,
+        concept_ids=explicit_ids,
+        source="explicit",
+    )
+
+    notes_lib.sync_wikilink_concepts(
+        conn,
+        note_id=note_id,
+        wikilink_names=wikilink_names,
+        explicit_ids=set(explicit_ids),
+    )
+    conn.commit()
+    console.print(f"Added note #{note_id}.")
+
+
+@note.command("edit")
+@click.argument("note_id", type=int)
+@click.pass_context
+def note_edit(ctx: click.Context, note_id: int) -> None:
+    conn = ctx.obj["conn"]
+    row = conn.execute(
+        "SELECT body, note_type FROM notes WHERE id = ?",
+        (note_id,),
+    ).fetchone()
+    if not row:
+        raise click.ClickException(f"Note {note_id} not found.")
+
+    updated = click.edit(row["body"])
+    if updated is None:
+        return
+    updated = updated.strip()
+    if not updated:
+        raise click.ClickException("Note body cannot be empty.")
+
+    wikilink_names = notes_lib.parse_wikilinks(updated)
+    explicit_ids = {
+        row["concept_id"]
+        for row in conn.execute(
+            """
+            SELECT concept_id
+            FROM note_concepts
+            WHERE note_id = ? AND source = 'explicit'
+            """,
+            (note_id,),
+        ).fetchall()
+    }
+
+    wikilink_ids = set()
+    for concept_name in wikilink_names:
+        try:
+            wikilink_ids.add(notes_lib.resolve_or_create_concept_id(conn, concept_name))
+        except ResolutionError as exc:
+            raise click.ClickException(str(exc)) from exc
+
+    if row["note_type"] == "standard" and len(explicit_ids | wikilink_ids) > 1:
+        raise click.ClickException(
+            "Standard notes can link to at most one concept. Use --type relation."
+        )
+
+    conn.execute(
+        "UPDATE notes SET body = ? WHERE id = ?",
+        (updated, note_id),
+    )
+
+    notes_lib.sync_wikilink_concepts(
+        conn,
+        note_id=note_id,
+        wikilink_names=wikilink_names,
+        explicit_ids=set(explicit_ids),
+    )
+    conn.commit()
+    console.print(f"Updated note #{note_id}.")
+
+
+@note.command("link")
+@click.argument("from_note", type=int)
+@click.argument("to_note", type=int)
+@click.pass_context
+def note_link(ctx: click.Context, from_note: int, to_note: int) -> None:
+    conn = ctx.obj["conn"]
+    if from_note == to_note:
+        raise click.ClickException("Cannot link a note to itself.")
+    conn.execute(
+        """
+        INSERT OR IGNORE INTO note_links (from_note_id, to_note_id)
+        VALUES (?, ?)
+        """,
+        (from_note, to_note),
+    )
+    conn.commit()
+    console.print(f"Linked note #{from_note} -> #{to_note}.")
+
+
+@cli.command()
+@click.argument("text", required=False)
+@click.option("--book", "book_title", default=None, help="Book title or alias.")
+@click.option("--location", "source_location", required=True, help="Source location.")
+@click.option("--concept", "concepts", multiple=True, help="Link to a concept.")
+@click.pass_context
+def quote(
+    ctx: click.Context,
+    text: str | None,
+    book_title: str | None,
+    source_location: str,
+    concepts: tuple[str, ...],
+) -> None:
+    body = text or click.edit("")
+    if body is None:
+        return
+    body = body.strip()
+    if not body:
+        raise click.ClickException("Quote text is required.")
+
+    conn = ctx.obj["conn"]
+    book_id = None
+    if book_title:
+        try:
+            book_id, _ = resolve_book_id(conn, book_title)
+        except ResolutionError as exc:
+            raise click.ClickException(str(exc)) from exc
+
+    cursor = conn.execute(
+        """
+        INSERT INTO notes (
+            title, body, book_id, chapter_id, note_type, source_location, is_quote
+        ) VALUES (?, ?, ?, ?, ?, ?, 1)
+        """,
+        (None, body, book_id, None, "standard", source_location),
+    )
+    note_id = int(cursor.lastrowid)
+
+    explicit_ids: list[int] = []
+    for concept_name in concepts:
+        try:
+            explicit_ids.append(notes_lib.resolve_or_create_concept_id(conn, concept_name))
+        except ResolutionError as exc:
+            raise click.ClickException(str(exc)) from exc
+
+    notes_lib.insert_note_concepts(
+        conn,
+        note_id=note_id,
+        concept_ids=explicit_ids,
+        source="explicit",
+    )
+    notes_lib.sync_wikilink_concepts(
+        conn,
+        note_id=note_id,
+        wikilink_names=notes_lib.parse_wikilinks(body),
+        explicit_ids=set(explicit_ids),
+    )
+    conn.commit()
+    console.print(f"Added quote #{note_id}.")
+
+
+@cli.group(name="notes", invoke_without_command=True)
+@click.option("--concept", "concept_name", default=None, help="Filter by concept.")
+@click.option("--book", "book_title", default=None, help="Filter by book.")
+@click.option("--draft", "draft_only", is_flag=True, help="Show unlinked notes.")
+@click.option(
+    "--type",
+    "note_type",
+    type=click.Choice(sorted(NOTE_TYPES), case_sensitive=False),
+    default=None,
+    help="Filter by note type.",
+)
+@click.pass_context
+def notes_cmd(
+    ctx: click.Context,
+    concept_name: str | None,
+    book_title: str | None,
+    draft_only: bool,
+    note_type: str | None,
+) -> None:
+    if ctx.invoked_subcommand is not None:
+        return
+
+    conn = ctx.obj["conn"]
+    params: list[object] = []
+    joins: list[str] = []
+    where: list[str] = []
+
+    if concept_name:
+        try:
+            concept_id, _ = resolve_concept_id(conn, concept_name)
+        except ResolutionError as exc:
+            raise click.ClickException(str(exc)) from exc
+        joins.append("JOIN note_concepts nc ON nc.note_id = n.id")
+        where.append("nc.concept_id = ?")
+        params.append(concept_id)
+
+    if book_title:
+        try:
+            book_id, _ = resolve_book_id(conn, book_title)
+        except ResolutionError as exc:
+            raise click.ClickException(str(exc)) from exc
+        where.append("n.book_id = ?")
+        params.append(book_id)
+
+    if draft_only:
+        where.append(
+            "NOT EXISTS (SELECT 1 FROM note_concepts nc2 WHERE nc2.note_id = n.id)"
+        )
+
+    if note_type:
+        where.append("n.note_type = ?")
+        params.append(note_type)
+
+    query = (
+        "SELECT n.id, n.title, n.body, n.note_type, n.source_location, b.title AS book_title "
+        "FROM notes n "
+        "LEFT JOIN books b ON b.id = n.book_id "
+    )
+    if joins:
+        query += " " + " ".join(joins)
+    if where:
+        query += " WHERE " + " AND ".join(where)
+    query += " GROUP BY n.id ORDER BY n.id DESC"
+
+    rows = conn.execute(query, params).fetchall()
+    table = Table(title="Notes")
+    table.add_column("ID", justify="right")
+    table.add_column("Title")
+    table.add_column("Type")
+    table.add_column("Book")
+    for row in rows:
+        title = row["title"] or row["body"].strip().replace("\n", " ")
+        if len(title) > 80:
+            title = title[:77].rstrip() + "..."
+        table.add_row(
+            str(row["id"]),
+            title,
+            row["note_type"] or "",
+            row["book_title"] or "",
+        )
+    console.print(table)
+
+
+@notes_cmd.command("search")
+@click.argument("query")
+@click.pass_context
+def notes_search(ctx: click.Context, query: str) -> None:
+    conn = ctx.obj["conn"]
+    rows = conn.execute(
+        """
+        SELECT n.id, n.title, n.body, n.note_type, b.title AS book_title
+        FROM notes_fts f
+        JOIN notes n ON n.id = f.rowid
+        LEFT JOIN books b ON b.id = n.book_id
+        WHERE notes_fts MATCH ?
+        ORDER BY bm25(notes_fts)
+        """,
+        (query,),
+    ).fetchall()
+
+    table = Table(title=f'Search results for "{query}"')
+    table.add_column("ID", justify="right")
+    table.add_column("Title")
+    table.add_column("Type")
+    table.add_column("Book")
+    for row in rows:
+        title = row["title"] or row["body"].strip().replace("\n", " ")
+        if len(title) > 80:
+            title = title[:77].rstrip() + "..."
+        table.add_row(
+            str(row["id"]),
+            title,
+            row["note_type"] or "",
+            row["book_title"] or "",
+        )
     console.print(table)
 
 
