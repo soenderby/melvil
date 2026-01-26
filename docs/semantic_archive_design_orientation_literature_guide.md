@@ -15,13 +15,16 @@ The focus is **semantic information**: meaning-rich material whose relevance dep
 **This document describes conceptual foundations**, not current implementation.
 
 Melvil is now a **concept mapping system** for readers who build understanding by connecting ideas across sources. For current implementation:
-- `SPEC_MVP.md` — Phase 1: Concept mapping (books, concepts, notes)
+- `SPEC_MVP.md` — Phase 1: Concept mapping with low-friction capture
 - `SPEC_FULL.md` — Full vision and phased roadmap
 
-The frameworks here (semantic retrieval, multi-mode interaction, provenance) inform design principles. The current implementation focuses specifically on:
+The frameworks here (semantic retrieval, multi-mode interaction, provenance) inform design principles. The current implementation focuses on:
 - **First-class concepts** that span multiple books
-- **Atomic notes** in Zettelkasten style
-- **Explicit concept links** (relationships between ideas)
+- **Low-friction capture** via `[[wikilinks]]` with emergent structure
+- **Basic visualization** so users can see the map they're building
+- **Maintenance tools** to prune noise as the map grows
+
+The guiding principle "capture first, structure progressively" directly shapes the implementation: structure can be explicit (deliberate linking) or emergent (from `[[wikilink]]` mentions in notes).
 
 **Use this document to understand the theoretical background, not as implementation guidance.**
 

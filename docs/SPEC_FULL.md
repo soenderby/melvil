@@ -32,7 +32,17 @@ Melvil addresses this by making the concept map **explicit, persistent, and navi
 2. **Shallow before deep** — Map a book's territory before committing to read it
 3. **Sources as evidence** — Books support and develop concepts; they don't own them
 4. **Notes are atomic** — One idea per note, linked to concepts and sources
-5. **The map grows** — Understanding accumulates; nothing is lost
+5. **Structure can be explicit or emergent** — Build deliberately or let it emerge from `[[wikilinks]]`
+6. **The map grows and is pruned** — Understanding accumulates; noise is archived
+7. **A map you can't see isn't useful** — Basic visualization is essential, not a luxury
+
+## Two Paths to Structure
+
+**Explicit structure**: Create concepts deliberately, define them, link them carefully.
+
+**Emergent structure**: Write notes with `[[concept]]` mentions, concepts are created implicitly, refine later.
+
+Both paths lead to the same map. The system supports quick capture when reading and deliberate structuring when reflecting. Most users will mix both approaches.
 
 ---
 
@@ -83,15 +93,19 @@ listed → mapped → reading → read → deep
    └───────────────────────────────────── In system, not yet examined
 ```
 
-### Note Types (Zettelkasten)
+### Notes
 
-Following Ahrens' interpretation of Luhmann's system:
+Notes capture your thinking. The system uses a simple status model:
 
-| Type | Purpose | Lifecycle |
-|------|---------|-----------|
-| **Fleeting** | Quick captures, unprocessed thoughts | Temporary; process into permanent or delete |
-| **Literature** | Summarizes a source in your words | Stays attached to source |
-| **Permanent** | Your own thinking, fully developed | Joins the concept network |
+| Status | Meaning |
+|--------|---------|
+| **draft** | Quick capture, not yet refined |
+| **active** | Normal note, part of the working map |
+| **archived** | Hidden from default views, still queryable |
+
+**Zettelkasten note types** (fleeting/literature/permanent) are valid mental models but aren't enforced by the system. If you want to track them, use tags or a naming convention. The system doesn't require classification overhead for every note.
+
+**Structure notes** (Phase 2) organize other notes into synthesis documents. They don't contain new ideas—they arrange existing notes into coherent arguments.
 
 ---
 
@@ -99,33 +113,69 @@ Following Ahrens' interpretation of Luhmann's system:
 
 ### Phase 1: Concept Mapping (MVP)
 
-**Goal**: Build and navigate the concept map.
+**Goal**: Low-friction capture, basic visualization, map maintenance.
 
 **Capabilities**:
 - Add books from Zotero or manually
 - Capture table of contents
-- Create concepts with definitions
-- Link concepts to books (with location, treatment, importance)
-- Link concepts to each other (related, prerequisite, contradicts, etc.)
-- Write atomic notes tied to concepts and/or sources
-- Explore the map via CLI
+- Create concepts explicitly or implicitly via `[[wikilinks]]`
+- Link concepts to books and to each other
+- Write notes with `[[concept]]` mentions (auto-linking)
+- **Basic TUI visualization** — see the graph you're building
+- **Maintenance tools** — merge duplicates, archive stale concepts
+- Export to Markdown, DOT, Obsidian format
 
 **See**: `SPEC_MVP.md` for complete specification.
 
-### Phase 2: Deep Reading & Visualization
+### Phase 2: Advanced Navigation, Synthesis & Deep Reading
 
-**Goal**: Support deep reading and make the map visual.
+**Goal**: Advanced navigation, synthesis workflows, and deep reading support.
+
+Phase 1 provides basic visualization. Phase 2 adds **advanced navigation aids** for complex maps and **synthesis workflows** for turning accumulated notes into coherent output.
 
 **Capabilities**:
+
+*Advanced Navigation:*
+- **Web-based visualization**: Richer interaction than TUI allows
+- **Landmarks**: Mark key concepts as navigation anchors / entry points
+- **Path finding**: Show how two concepts connect through the graph
+- **Session tracking**: "Where was I?" context when returning to the map
+- **Clustering**: Auto-detect and visualize concept communities
+
+*Synthesis:*
+- **Structure notes**: Organize notes into synthesis documents
+- **Synthesis workflow**: Assemble notes on a topic into coherent arguments
+
+*Deep Reading:*
 - **Passage capture**: Extract quotes with page-level provenance
 - **Full-text search**: Search within indexed PDFs
-- **Graph visualization**: Interactive concept map (TUI or web)
 - **Gap analysis**: Identify concepts you've mapped but not understood deeply
 - **Reading suggestions**: "To understand X, you might read Y"
 
 **New data structures**:
 
 ```sql
+-- Structure notes organize other notes into synthesis
+-- (note_type = 'structure' in notes table)
+
+-- Items within a structure note
+structure_note_items (
+  id INTEGER PRIMARY KEY,
+  structure_note_id INTEGER NOT NULL REFERENCES notes(id),
+
+  -- What this item references (one of these)
+  referenced_note_id INTEGER REFERENCES notes(id),
+  referenced_concept_id INTEGER REFERENCES concepts(id),
+
+  -- Position in the structure
+  position INTEGER NOT NULL,
+
+  -- Commentary on this item within the synthesis
+  commentary TEXT,
+
+  UNIQUE(structure_note_id, position)
+)
+
 -- Passages for deep reading
 passages (
   id INTEGER PRIMARY KEY,
@@ -158,8 +208,111 @@ notes_fts USING fts5(title, body, content=notes)
 passages_fts USING fts5(text, content=passages)
 ```
 
+**Synthesis workflow**:
+
+The synthesis capability bridges accumulation and output. After building up notes over time, users create **structure notes** that organize existing notes into coherent arguments.
+
+```bash
+# After months of accumulation...
+melvil map --concept "consensus"
+# "47 notes across 8 books. Time to synthesize."
+
+# Create a structure note
+melvil synthesize "Understanding Consensus"
+
+# Add notes and concepts to the structure
+melvil synth add-note 42
+melvil synth add-note 57 --comment "Contradicts #42 on timing"
+melvil synth add-concept "Paxos"           # All notes on Paxos
+melvil synth add-concept "Raft" --notes 63,67  # Specific notes
+
+# Arrange and review
+melvil synth reorder "Understanding Consensus"
+melvil synth show "Understanding Consensus"
+
+# Export as document
+melvil synth export "Understanding Consensus"
+```
+
+**Synthesis export format**:
+
+```markdown
+# Understanding Consensus
+
+*Synthesized from 23 notes across 5 books*
+
+## The Core Problem
+
+> [Note #42] Consensus is fundamentally about agreement...
+
+> [Note #57] FLP impossibility shows we can't have it all...
+
+*Commentary: These establish the theoretical foundation.*
+
+## Practical Solutions
+
+### Paxos
+> [Note #63] Paxos solves consensus but is notoriously difficult...
+
+### Raft
+> [Note #67] Raft was designed for understandability...
+
+*Commentary: Raft is essentially Paxos made teachable.*
+
+---
+Sources: DDIA, Paxos Made Simple, Raft Paper, Database Internals
+```
+
+**Navigation data structures**:
+
+```sql
+-- Landmarks: key concepts that serve as navigation anchors
+-- (stored as a flag on concepts table or separate table)
+landmarks (
+  id INTEGER PRIMARY KEY,
+  concept_id INTEGER NOT NULL UNIQUE REFERENCES concepts(id),
+  notes TEXT,                   -- Why this is a landmark
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+)
+
+-- Session tracking: where was the user last exploring
+sessions (
+  id INTEGER PRIMARY KEY,
+  started_at TIMESTAMP,
+  ended_at TIMESTAMP,
+  last_concept_id INTEGER REFERENCES concepts(id),
+  last_book_id INTEGER REFERENCES books(id),
+  breadcrumbs TEXT              -- JSON array of recent concept IDs
+)
+```
+
+**Navigation commands**:
+
+```bash
+# Mark a concept as a landmark (navigation anchor)
+melvil landmark "distributed systems"
+melvil landmark "consensus" --note "Core concept for understanding coordination"
+
+# View landmarks
+melvil landmarks
+
+# Find path between two concepts
+melvil path "CAP theorem" "Raft"
+# Output: CAP theorem → consistency → linearizability → consensus → Raft
+
+# See recent activity
+melvil recent
+# Output: Last session 3 days ago. Exploring: consensus → Raft → leader election
+
+# Resume where you left off
+melvil resume
+
+# View concept clusters (auto-detected communities)
+melvil clusters
+```
+
 **Visualization approaches** (to be validated):
-- Terminal: Tree view with Rich, graph with Textual
+- Terminal: Tree view with Rich, interactive graph with Textual
 - Web: Force-directed graph with D3.js or similar
 - Export: Graphviz DOT format, Obsidian canvas
 
@@ -264,11 +417,16 @@ CREATE TABLE concepts (
   -- Organization (optional hierarchy)
   parent_id INTEGER REFERENCES concepts(id),
 
+  -- Lifecycle
+  archived BOOLEAN DEFAULT FALSE,           -- Hidden from default views
+  merged_into_id INTEGER REFERENCES concepts(id),  -- If merged into another
+
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE INDEX idx_concepts_parent ON concepts(parent_id);
+CREATE INDEX idx_concepts_archived ON concepts(archived) WHERE NOT archived;
 ```
 
 ### Book-Concept Links
@@ -279,15 +437,11 @@ CREATE TABLE book_concepts (
   book_id INTEGER NOT NULL REFERENCES books(id) ON DELETE CASCADE,
   concept_id INTEGER NOT NULL REFERENCES concepts(id) ON DELETE CASCADE,
 
-  -- Location
+  -- Location (optional)
   chapter_id INTEGER REFERENCES chapters(id),
   location TEXT,                -- Free text: "Ch. 9", "pp. 300-350"
 
-  -- Classification
-  treatment TEXT,               -- 'introduces', 'discusses', 'applies', 'critiques', 'mentions'
-  importance TEXT,              -- 'central', 'significant', 'mentioned'
-
-  -- Your notes on this treatment
+  -- Your notes on how this book treats the concept (free text)
   notes TEXT,
 
   UNIQUE(book_id, concept_id)
@@ -296,6 +450,8 @@ CREATE TABLE book_concepts (
 CREATE INDEX idx_book_concepts_book ON book_concepts(book_id);
 CREATE INDEX idx_book_concepts_concept ON book_concepts(concept_id);
 ```
+
+Note: Earlier designs included `treatment` (introduces/discusses/etc.) and `importance` (central/significant/mentioned) enum fields. These were removed to reduce friction—users rarely filled them consistently, and free-text notes serve the same purpose without requiring micro-decisions on every link.
 
 ### Concept Links
 
@@ -329,21 +485,21 @@ CREATE INDEX idx_concept_links_to ON concept_links(to_concept_id);
 CREATE TABLE notes (
   id INTEGER PRIMARY KEY,
 
-  -- Content
+  -- Content (body supports [[wikilinks]] for concept mentions)
   title TEXT,
   body TEXT NOT NULL,
 
-  -- Connections (all optional, at least one recommended)
-  concept_id INTEGER REFERENCES concepts(id) ON DELETE SET NULL,
+  -- Primary connections (optional — concepts can also link via [[wikilinks]] in body)
+  concept_id INTEGER REFERENCES concepts(id) ON DELETE SET NULL,  -- Primary concept
   book_id INTEGER REFERENCES books(id) ON DELETE SET NULL,
   chapter_id INTEGER REFERENCES chapters(id) ON DELETE SET NULL,
 
-  -- Source location (for literature notes)
+  -- Source location (for quotes)
   source_location TEXT,         -- "p.336", "Ch. 9, §3"
   is_quote BOOLEAN DEFAULT FALSE,
 
-  -- Zettelkasten type
-  note_type TEXT DEFAULT 'permanent',  -- 'fleeting', 'literature', 'permanent'
+  -- Status
+  status TEXT DEFAULT 'active',  -- 'draft', 'active', 'archived'
 
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -351,8 +507,32 @@ CREATE TABLE notes (
 
 CREATE INDEX idx_notes_concept ON notes(concept_id);
 CREATE INDEX idx_notes_book ON notes(book_id);
-CREATE INDEX idx_notes_type ON notes(note_type);
+CREATE INDEX idx_notes_status ON notes(status);
 ```
+
+### Note-Concept Links
+
+```sql
+-- Links from [[wikilinks]] in note body, plus explicit links
+CREATE TABLE note_concepts (
+  id INTEGER PRIMARY KEY,
+  note_id INTEGER NOT NULL REFERENCES notes(id) ON DELETE CASCADE,
+  concept_id INTEGER NOT NULL REFERENCES concepts(id) ON DELETE CASCADE,
+
+  -- How link was created
+  source TEXT DEFAULT 'wikilink',  -- 'wikilink' (parsed from body), 'explicit'
+
+  UNIQUE(note_id, concept_id)
+);
+
+CREATE INDEX idx_note_concepts_note ON note_concepts(note_id);
+CREATE INDEX idx_note_concepts_concept ON note_concepts(concept_id);
+```
+
+When a note body contains `[[consensus]]`, the system:
+1. Finds or creates a concept named "consensus"
+2. Creates a row in `note_concepts` with `source='wikilink'`
+3. Re-parses on note edit to keep links current
 
 ### Note Links
 
@@ -388,6 +568,10 @@ CREATE TABLE aliases (
 
 ```
 melvil
+├── note <text>                 # Quick capture with [[wikilinks]] (most common)
+├── quote                       # Create a quote note
+├── notes                       # List/search notes
+│
 ├── add <title>                 # Add a book
 ├── show <title>                # Show book details
 ├── books                       # List books
@@ -404,18 +588,33 @@ melvil
 │   ├── alias                   # Add concept alias
 │   ├── link                    # Link concept to book
 │   ├── relate                  # Link concept to concept
+│   ├── merge                   # Merge two concepts
+│   ├── archive                 # Archive a concept
+│   ├── restore                 # Restore archived concept
 │   └── show                    # Show concept details
-├── concepts                    # List concepts
+├── concepts                    # List concepts (--orphan, --stale, --archived)
 │
-├── note                        # Create a note
-├── quote                       # Create a quote note
-├── notes                       # List/search notes
+├── map                         # Show concept map (text)
+├── viz                         # Interactive graph visualization (TUI)
 │
-├── map                         # Show concept map
+├── cleanup                     # Maintenance: find/archive orphans
+│
+├── landmark <concept>          # Mark as navigation anchor (Phase 2)
+├── landmarks                   # List landmarks (Phase 2)
+├── path <from> <to>            # Find connection path (Phase 2)
+├── recent                      # Show recent activity (Phase 2)
+├── resume                      # Resume last session (Phase 2)
+├── clusters                    # Show concept clusters (Phase 2)
+│
+├── synthesize <title>          # Create structure note (Phase 2)
+├── synth                       # Synthesis commands (Phase 2)
+│   ├── show / list / add-note / add-concept / reorder / export
 │
 ├── export                      # Export data
-│   ├── map                     # Export concept map
-│   └── notes                   # Export notes
+│   ├── --format markdown       # Markdown export
+│   ├── --format dot            # Graphviz DOT
+│   ├── --format obsidian       # Obsidian vault with [[wikilinks]]
+│   └── --format json           # Full data export
 │
 └── zotero
     └── sync                    # Sync from Zotero
@@ -423,10 +622,11 @@ melvil
 
 ### Design Principles
 
-1. **Titles over IDs**: `melvil show "DDIA"` not `melvil show 42`
-2. **Aliases for convenience**: Short names for frequently used books
-3. **Progressive detail**: `melvil books` → `melvil show X` → `melvil concept show Y`
-4. **Composable commands**: Each command does one thing well
+1. **Quick capture first**: `melvil note` is the most common command
+2. **Titles over IDs**: `melvil show "DDIA"` not `melvil show 42`
+3. **Implicit concept creation**: `[[wikilinks]]` create concepts automatically
+4. **Progressive detail**: `melvil books` → `melvil show X` → `melvil concept show Y`
+5. **Maintenance is normal**: Merge, archive, and cleanup are first-class operations
 
 ---
 
@@ -485,16 +685,23 @@ melvil
 
 | Metric | Target |
 |--------|--------|
+| Time to capture a thought | < 15 seconds (quick note with [[wikilinks]]) |
 | Time to map a book | < 5 minutes for TOC + 5 concepts |
-| Time to create a concept | < 10 seconds |
 | Time to find books covering a concept | < 500ms |
+| Graph rendering (TUI) | < 2 seconds for 200 concepts |
+| Merge two concepts | < 5 seconds |
 | Map export completeness | 100% of data included |
 
 ### Phase 2
 
 | Metric | Target |
 |--------|--------|
-| Graph rendering | < 2 seconds for 100 concepts |
+| Time to re-orient after 6 months | < 2 minutes using landmarks + recent |
+| Path finding | < 500ms for 500-concept graph |
+| Web graph rendering | < 2 seconds for 500 concepts |
+| Cluster detection | < 5 seconds for 500 concepts |
+| Structure note creation | < 1 minute to create and add 10 notes |
+| Synthesis export | < 2 seconds for 50-note structure |
 | Passage capture | < 30 seconds per passage |
 | FTS latency | < 500ms for 10k notes |
 
@@ -502,11 +709,36 @@ melvil
 
 ## Anti-Patterns to Avoid
 
-1. **Premature structure** — Don't force hierarchy on concepts too early
-2. **Capture without connection** — Notes should link to something
+1. **Premature structure** — Don't force hierarchy on concepts too early; let structure emerge
+2. **Capture without connection** — Notes should link to something (but `[[wikilinks]]` make this easy)
 3. **All mapping, no reading** — The map serves reading, not the reverse
-4. **Precision theater** — Page numbers are useful; file hashes usually aren't
+4. **Precision theater** — Page numbers are useful; enum classifications usually aren't
 5. **Tool over thinking** — Melvil assists thinking; it doesn't replace it
+6. **Infinite accumulation** — Without maintenance, the map becomes a junk drawer
+7. **Ceremony over capture** — If adding a thought takes more than 15 seconds, something is wrong
+
+---
+
+## Reading Integration
+
+Melvil is a **capture and mapping tool**, not a reading tool. Reading happens elsewhere:
+- Physical books
+- Kindle / e-readers
+- PDF readers (Preview, Acrobat, Zotero)
+- Web browsers
+
+The workflow is: read → capture thought → return to reading.
+
+**Design implications**:
+- Quick capture (`melvil note`) must be fast enough to not break reading flow
+- `[[wikilinks]]` reduce the overhead of linking
+- Draft status lets you capture rough thoughts now, refine later
+- Mobile/web capture is a future consideration (not MVP)
+
+**Future possibilities** (not committed):
+- Browser extension for capture while reading online
+- Readwise integration for highlight import
+- Kindle clippings import
 
 ---
 

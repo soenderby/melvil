@@ -4,29 +4,34 @@
 
 Melvil helps readers **map concepts across books** to build understanding incrementally. It externalizes the mental map that forms when reading broadly, tracking which books cover which concepts and how ideas connect.
 
+**The MVP focuses on low-friction capture and basic visualization.** You capture thoughts as you read, concepts emerge from your notes, and you can see the map you're building. Structure can be explicit or can emerge from usage—the system supports both.
+
 The system supports the workflow of a reader who:
 - Reads broadly across many books
 - Cannot read everything end-to-end
 - Maps books shallowly first (TOC, key concepts)
 - Builds a concept graph that spans sources
 - Dives deeper selectively based on the map
-- Takes atomic notes in a Zettelkasten style
+- Takes notes while reading, refines structure later
 
 ---
 
 ## MVP Goals
 
-1. **Track books** with metadata, TOC, and reading depth.
-2. **Map concepts** as first-class entities that span multiple books.
-3. **Link concepts** to each other and to the books that discuss them.
-4. **Write atomic notes** tied to concepts and/or specific sources.
-5. **Explore the map** to see what books cover a concept and how concepts relate.
+1. **Low-friction capture** — Quick notes with implicit concept creation via `[[wikilinks]]`.
+2. **Track books** with metadata, TOC, and reading depth.
+3. **Map concepts** as first-class entities that span multiple books.
+4. **Link concepts** to each other and to the books that discuss them.
+5. **Write notes** tied to concepts and/or specific sources.
+6. **See the map** — Basic visualization so you can actually see what you're building.
+7. **Maintain the map** — Merge duplicates, archive stale concepts, prune noise.
 
 ---
 
 ## Non-Goals (MVP)
 
-- Graph visualization (Phase 2)
+- Structure notes and synthesis workflows (Phase 2)
+- Advanced graph visualization with clustering (Phase 2)
 - Reading suggestions based on concept gaps (Phase 2)
 - Full-text search within PDFs (Phase 2)
 - Passage-level capture with page references (Phase 2)
@@ -61,6 +66,14 @@ The central data structure is a **concept map**:
 - **Links** connect concepts to each other (related, contradicts, prerequisite, etc.)
 - **Notes** are atomic thoughts tied to concepts and/or sources
 
+### Two Input Paths, One Data Model
+
+**Explicit**: `melvil concept "consensus"` then `melvil concept link "consensus" --book "DDIA"`
+
+**Quick capture**: `melvil note --book "DDIA" "[[consensus]] is equivalent to total order broadcast"`
+
+Both create the same data: a concept, a note, links between them. The `[[wikilink]]` syntax is just a convenient way to create concepts and set the note's concept link in one command. There's no separate storage mechanism—wikilinks are an input method, not a data structure.
+
 ### Reading Depth
 
 Books have a **depth level** indicating how thoroughly they've been engaged:
@@ -73,13 +86,13 @@ Books have a **depth level** indicating how thoroughly they've been engaged:
 | `read` | Read through, concepts and notes captured |
 | `deep` | Studied deeply, passages extracted |
 
-### Atomic Notes (Zettelkasten)
+### Notes
 
-Notes follow Zettelkasten principles:
-- **Atomic**: One idea per note
-- **Linked**: Connected to concepts and sources
-- **Authored**: Your own words, not just quotes
-- **Addressable**: Each note has a unique ID for cross-reference
+Notes capture your thinking. They can be:
+- **Quick captures** — Jotted while reading, refined later
+- **Developed thoughts** — Fully articulated ideas
+
+Classification (fleeting/literature/permanent) is optional. The system doesn't enforce Zettelkasten orthodoxy—use it if it helps, ignore it if it doesn't.
 
 ---
 
@@ -159,20 +172,18 @@ book_concepts (
   book_id INTEGER NOT NULL REFERENCES books(id),
   concept_id INTEGER NOT NULL REFERENCES concepts(id),
 
-  -- Where in the book
+  -- Where in the book (all optional)
   chapter_id INTEGER REFERENCES chapters(id),
   location TEXT,                -- "Chapter 9", "pp. 300-350", etc.
 
-  -- How the book treats this concept
-  treatment TEXT,               -- 'introduces', 'discusses', 'applies', 'critiques'
-  importance TEXT,              -- 'central', 'significant', 'mentioned'
-
-  -- Your notes on this specific treatment
-  notes TEXT,
+  -- Your notes on this treatment (free text, optional)
+  notes TEXT,                   -- How the book treats this concept, why it matters
 
   UNIQUE(book_id, concept_id)
 )
 ```
+
+Note: Earlier designs included `treatment` (introduces/discusses/applies) and `importance` (central/significant/mentioned) fields. These were removed to reduce friction. If you want to note that DDIA "introduces" consensus, put it in the `notes` field. Structure that doesn't get used is worse than no structure.
 
 ### Concept Links (Graph Edges)
 
@@ -192,7 +203,7 @@ concept_links (
 )
 ```
 
-### Notes (Zettelkasten Atoms)
+### Notes
 
 ```sql
 notes (
@@ -207,12 +218,9 @@ notes (
   book_id INTEGER REFERENCES books(id),
   chapter_id INTEGER REFERENCES chapters(id),
 
-  -- For quotes/passages (Phase 2 will expand this)
+  -- For quotes/passages
   source_location TEXT,         -- "DDIA p.336", "Ch. 9", etc.
   is_quote BOOLEAN DEFAULT FALSE,
-
-  -- Zettelkasten metadata
-  note_type TEXT DEFAULT 'permanent', -- 'fleeting', 'literature', 'permanent'
 
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -231,6 +239,7 @@ note_links (
 )
 ```
 
+
 ### Title Aliases
 
 ```sql
@@ -244,6 +253,23 @@ aliases (
 ---
 
 ## CLI Surface
+
+### Quick Capture (Low Friction Path)
+
+```bash
+# Capture a thought while reading
+# [[wikilinks]] create concepts if needed and set the note's concept link
+melvil note "[[CAP theorem]] framing as 'pick 2 of 3' is misleading" --book "DDIA"
+
+# If multiple [[wikilinks]] appear, the first becomes the note's concept_id
+# Or specify explicitly:
+melvil note "[[linearizability]] vs [[serializability]]" --concept "linearizability"
+
+# Quick capture opens $EDITOR if no text provided
+melvil note --book "DDIA"
+```
+
+The `[[wikilink]]` syntax is shorthand for `--concept`. It creates the concept if it doesn't exist and links the note to it. This is the same data as explicit commands—just faster to type.
 
 ### Book Management
 
@@ -263,7 +289,7 @@ melvil depth "DDIA" mapped
 melvil depth "DDIA" reading
 
 # Add your summary of what the book is about
-melvil about "DDIA" "Comprehensive guide to distributed systems from a data perspective. Covers storage, replication, partitioning, transactions, and stream processing."
+melvil about "DDIA" "Comprehensive guide to distributed systems from a data perspective."
 
 # List books
 melvil books                    # All books
@@ -290,18 +316,19 @@ melvil toc summarize "DDIA" --chapter 9 "Covers linearizability, consensus algor
 ### Concept Management
 
 ```bash
-# Create a concept
+# Create a concept explicitly (or let it be created implicitly via [[wikilinks]])
 melvil concept "CAP theorem"
-melvil concept "linearizability" --definition "A consistency model where operations appear atomic and ordered"
+melvil concept "linearizability" --definition "Operations appear atomic and ordered"
 
 # Add aliases
 melvil concept alias "CAP theorem" "Brewer's theorem" "CAP"
 
 # Link a concept to a book
-melvil concept link "CAP theorem" --book "DDIA" --chapter 9 --treatment discusses --importance central
+melvil concept link "CAP theorem" --book "DDIA" --chapter 9
+melvil concept link "CAP theorem" --book "DDIA" --note "Central to Ch. 9, good intro"
 
 # Link concepts to each other
-melvil concept relate "linearizability" "serializability" --type related --note "Often confused but different"
+melvil concept relate "linearizability" "serializability" --note "Often confused but different"
 melvil concept relate "consensus" "linearizability" --type prerequisite
 
 # View a concept
@@ -310,26 +337,23 @@ melvil concept show "CAP theorem"
 # List all concepts
 melvil concepts
 melvil concepts --book "DDIA"   # Concepts from a specific book
+melvil concepts --orphan        # Concepts with no links (cleanup candidates)
 ```
 
 ### Note Management
 
 ```bash
-# Create a note on a concept
-melvil note --concept "CAP theorem" "The 'pick 2 of 3' framing is misleading. Partitions aren't optional—the real choice is between consistency and availability during a partition."
+# Quick note with [[wikilinks]] (concepts created/linked automatically)
+melvil note "[[CAP theorem]] 'pick 2 of 3' is misleading—partitions aren't optional"
 
-# Create a note on a book/chapter
-melvil note --book "DDIA" --chapter 9 "Kleppmann's treatment of consensus is clearer than most. Good bridge from theory to practice."
+# Note on a book (opens editor if no text)
+melvil note --book "DDIA" "Kleppmann's [[consensus]] treatment bridges theory and practice well"
 
-# Create a note with source location
-melvil note --concept "CAP theorem" --book "DDIA" --location "p.336" "Kleppmann argues CAP is 'unfortunate' terminology."
-
-# Create a literature note (summarizing source) vs permanent note (your thinking)
-melvil note --book "DDIA" --type literature "Summary of chapter 9: covers consistency models, linearizability vs serializability, distributed transactions, consensus."
-melvil note --concept "consensus" --type permanent "Consensus and linearizability are deeply connected: implementing one gives you the other."
+# Note with source location
+melvil note --book "DDIA" --location "p.336" "Kleppmann calls [[CAP theorem]] 'unfortunate' terminology"
 
 # Add a quote
-melvil quote --book "DDIA" --location "p.324" "Linearizability is a recency guarantee: once a read returns a value, all subsequent reads must return that value or a later one."
+melvil quote --book "DDIA" --location "p.324" "Linearizability is a recency guarantee..."
 
 # Link notes to each other
 melvil note link 42 57          # Link note #42 to note #57
@@ -338,7 +362,11 @@ melvil note link 42 57          # Link note #42 to note #57
 melvil notes                    # Recent notes
 melvil notes --concept "CAP theorem"
 melvil notes --book "DDIA"
+melvil notes --draft            # Unrefined captures
 melvil notes search "consensus"
+
+# Refine a draft note
+melvil note edit 42             # Opens in $EDITOR
 ```
 
 ### Exploring the Map
@@ -361,11 +389,66 @@ melvil export map --format markdown
 melvil export map --format json
 ```
 
+### Visualization (MVP)
+
+```bash
+# Open interactive graph view (TUI)
+melvil viz
+
+# Visualize a neighborhood (concept and its connections)
+melvil viz --focus "consensus"
+
+# Export for external tools
+melvil export --format dot | dot -Tpng > map.png
+melvil export --format obsidian    # Creates vault with [[wikilinks]]
+```
+
+The MVP includes basic visualization because a map you can't see isn't useful. The TUI shows concepts as nodes, links as edges, with keyboard navigation. It's not fancy, but it lets you see the structure.
+
+### Maintenance
+
+```bash
+# Find cleanup candidates
+melvil concepts --orphan         # No links to books or other concepts
+melvil notes --unlinked          # Notes with no concept
+
+# Merge duplicate concepts (moves all links from first to second, deletes first)
+melvil concept merge "CAP" "CAP theorem"
+
+# Delete unused concepts
+melvil concept delete "old-concept"
+melvil concept delete "old-concept" --force  # Even if it has links
+```
+
+Maintenance uses the same primitives: query, update, delete. No special "archived" state—if you don't want something, delete it.
+
 ---
 
 ## Workflows
 
-### Workflow 1: Map a New Book
+### Workflow 1: Quick Capture While Reading (Low Friction)
+
+```bash
+# You're reading DDIA. Capture thoughts as you go:
+$ melvil note --book "DDIA" "[[Linearizability]] is about recency, not transactions"
+$ melvil note --book "DDIA" "[[CAP theorem]] framing is misleading—see p.336"
+$ melvil note --book "DDIA" "[[consensus]] and [[total order broadcast]] are equivalent!"
+
+# Later, see what emerged:
+$ melvil concepts --book "DDIA"
+  linearizability (3 notes)
+  CAP theorem (1 note)
+  consensus (2 notes)
+  total order broadcast (1 note)  [NEW - created from wikilink]
+
+# Add definitions to the concepts you care about:
+$ melvil concept "linearizability" --definition "Recency guarantee for single-object ops"
+
+# See the map you're building:
+$ melvil viz --book "DDIA"
+```
+
+### Workflow 2: Structured Mapping (Deliberate)
 
 ```bash
 # 1. Add the book
@@ -380,52 +463,52 @@ Imported 12 chapters from PDF outline.
 $ melvil about "DDIA" "Comprehensive treatment of distributed data systems..."
 
 # 4. Identify key concepts and link them
-$ melvil concept link "replication" --book "DDIA" --chapter 5 --importance central
-$ melvil concept link "partitioning" --book "DDIA" --chapter 6 --importance central
-$ melvil concept link "transactions" --book "DDIA" --chapter 7 --importance central
-$ melvil concept link "consensus" --book "DDIA" --chapter 9 --importance central
+$ melvil concept link "replication" --book "DDIA" --chapter 5
+$ melvil concept link "partitioning" --book "DDIA" --chapter 6
+$ melvil concept link "consensus" --book "DDIA" --chapter 9 --note "Central chapter, very clear"
 
 # 5. Mark as mapped
 $ melvil depth "DDIA" mapped
 ```
 
-### Workflow 2: Build Concept Understanding
+### Workflow 3: Build Concept Understanding
 
 ```bash
 # 1. Create concept with working definition
-$ melvil concept "linearizability" --definition "Operations appear to execute atomically at a single point in time"
+$ melvil concept "linearizability" --definition "Operations appear atomic at a single point in time"
 
 # 2. Link to books that discuss it
-$ melvil concept link "linearizability" --book "DDIA" --chapter 9 --treatment discusses
-$ melvil concept link "linearizability" --book "Database Internals" --chapter 11 --treatment introduces
+$ melvil concept link "linearizability" --book "DDIA" --chapter 9
+$ melvil concept link "linearizability" --book "Database Internals" --chapter 11
 
 # 3. Relate to other concepts
-$ melvil concept relate "linearizability" "serializability" --type related
-$ melvil concept relate "linearizability" "consensus" --type related
+$ melvil concept relate "linearizability" "serializability" --note "Often confused, but different"
+$ melvil concept relate "linearizability" "consensus" --type prerequisite
 
-# 4. Add notes as you learn
-$ melvil note --concept "linearizability" "Key insight: linearizability is about single-object operations, serializability is about multi-object transactions."
-
-# 5. See the full picture
+# 4. See the full picture
 $ melvil concept show "linearizability"
+$ melvil viz --focus "linearizability"
 ```
 
-### Workflow 3: Decide What to Read Next
+### Workflow 4: Maintenance Session
 
 ```bash
-# See which concepts you've mapped but not read deeply
-$ melvil concepts --shallow
+# Monthly cleanup: see what needs attention
+$ melvil concepts --orphan
+  CAP (no books, no links) — maybe merge into "CAP theorem"?
+  old-idea (no notes, no books)
 
-# See which books cover a concept you want to understand
-$ melvil map --concept "consensus"
+$ melvil concept merge "CAP" "CAP theorem"
+Merged: 2 notes moved, concept archived.
 
-Books covering "consensus":
-  1. DDIA (Ch. 9) - discusses, central [mapped]
-  2. Database Internals (Ch. 14) - discusses, significant [listed]
-  3. Paxos Made Simple - introduces, central [listed]
+$ melvil concept archive "old-idea"
+Archived: old-idea
 
-# Decide to read Paxos paper, mark it
-$ melvil depth "Paxos Made Simple" reading
+$ melvil concepts --stale
+  Byzantine faults (last touched 8 months ago)
+
+# Either engage with it or archive it
+$ melvil concept archive "Byzantine faults"
 ```
 
 ---
@@ -471,19 +554,21 @@ Related concepts:
   → linearizability (related)
   → Paxos (specializes)
   → Raft (specializes)
-  → atomic broadcast (related)
+  → total order broadcast (related)
   ← fault tolerance (prerequisite)
 
 Books (4):
-  • DDIA, Ch. 9 - discusses, central [mapped]
-  • Database Internals, Ch. 14 - discusses [listed]
-  • Paxos Made Simple - introduces, central [listed]
-  • Raft paper - introduces, central [reading]
+  • DDIA, Ch. 9 [mapped] — "Central chapter, very clear"
+  • Database Internals, Ch. 14 [listed]
+  • Paxos Made Simple [listed]
+  • Raft paper [reading]
 
 Notes (3):
   #42: "Consensus and total order broadcast are equivalent..."
   #57: "FLP impossibility: no deterministic consensus in async system..."
   #63: "Practical systems use timeouts to circumvent FLP..."
+
+[View graph: melvil viz --focus "consensus"]
 ```
 
 ### `melvil map`
@@ -565,6 +650,11 @@ Consensus and total order broadcast are equivalent problems...
 
 ## Acceptance Criteria
 
+### Quick Capture
+- [ ] `melvil note "text with [[concept]]"` creates note and concept in one command
+- [ ] Concepts mentioned via `[[wikilinks]]` are created if they don't exist
+- [ ] Notes can be created without explicit concept/book flags
+
 ### Books
 - [ ] User can add a book manually or from Zotero
 - [ ] User can set and view reading depth
@@ -573,35 +663,52 @@ Consensus and total order broadcast are equivalent problems...
 
 ### Concepts
 - [ ] User can create concepts with definitions
-- [ ] User can link concepts to books with location and treatment
+- [ ] User can link concepts to books with optional notes
 - [ ] User can relate concepts to each other with typed links
 - [ ] `melvil concept show` displays full concept context
 
 ### Notes
 - [ ] User can create notes linked to concepts, books, or both
-- [ ] User can distinguish literature notes from permanent notes
 - [ ] User can link notes to each other
 - [ ] Notes are searchable by content
+- [ ] `[[wikilinks]]` in note body are parsed and linked
+
+### Visualization
+- [ ] `melvil viz` opens interactive TUI graph view
+- [ ] `melvil viz --focus X` shows concept X and its neighborhood
+- [ ] Graph is navigable via keyboard
+- [ ] Export to DOT format works
+
+### Maintenance
+- [ ] `melvil concepts --orphan` lists concepts with no connections
+- [ ] `melvil concept merge A B` merges A into B, moves links
+- [ ] `melvil concept archive X` hides concept from default views
+- [ ] Archived concepts are still queryable with `--archived` flag
 
 ### Map
-- [ ] `melvil map` shows hierarchical concept view
+- [ ] `melvil map` shows concept overview
 - [ ] `melvil map --concept X` shows books covering X
 - [ ] `melvil map --book X` shows concepts in X
 - [ ] Export produces valid Markdown
 
 ### Performance
 - [ ] All commands respond in < 500ms for 100 books, 500 concepts, 1000 notes
+- [ ] Visualization renders in < 2s for 200 concepts
 
 ---
 
 ## Phase 2 Preview
 
-- **Graph visualization**: Interactive concept map in terminal (TUI) or web
+Phase 1 (MVP) includes basic visualization. Phase 2 adds:
+
+- **Advanced visualization**: Clustering, landmarks, web-based view
+- **Structure notes**: Organize notes into synthesis documents
 - **Passage capture**: Deep reading with page-level provenance
 - **Full-text search**: Search within indexed PDFs
 - **Gap analysis**: "You've mapped X but not read about Y which is prerequisite"
+- **Session tracking**: "Where was I?" when returning after time away
 - **Import**: Obsidian vault, Roam, existing Zettelkasten
-- **Export**: Obsidian, Notion, Anki
+- **Export**: Notion, Anki
 
 ---
 
@@ -611,6 +718,19 @@ Consensus and total order broadcast are equivalent problems...
 - All data in single SQLite file
 - FTS5 for note search
 - JSON columns for arrays (authors, aliases, identifiers)
+
+### Wikilink Parsing
+- Parse `[[concept name]]` from note body on save
+- Case-insensitive matching against existing concepts
+- Create concept if no match found (name = wikilink text, no definition)
+- Store links in `note_concepts` table with `source='wikilink'`
+- Re-parse on note edit to update links
+
+### Visualization (TUI)
+- Use Textual for terminal-based graph view
+- Force-directed layout (simple spring model)
+- Keyboard navigation: arrow keys to move focus, enter to expand
+- Color coding: concepts by connection count, books by depth
 
 ### PDF TOC Extraction
 - Use PyMuPDF to extract PDF outline

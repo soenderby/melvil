@@ -101,7 +101,44 @@ Design questions to validate before committing to implementation decisions.
 
 ## Phase 2 Questions (Inform Future Design)
 
-### Q6: How important is visualization?
+### Q6: How should synthesis work?
+
+**Context**: Phase 2 adds structure notes for synthesis—organizing accumulated notes into coherent arguments.
+
+**Options**:
+1. **Note-centric** — Structure notes reference individual notes; you assemble note-by-note
+2. **Concept-centric** — Structure notes reference concepts; all notes on that concept come in
+3. **Hybrid** — Can add individual notes OR entire concepts
+4. **Outline-first** — Create an outline structure, then fill in with notes
+
+**Questions to explore**:
+- When you synthesize, do you start with an outline or let structure emerge?
+- Would you want to pull in "all notes on consensus" or select specific notes?
+- How much commentary/connective tissue do you write between quoted notes?
+
+**Decision needed**: Structure note assembly model.
+
+---
+
+### Q7: What helps you re-orient after time away?
+
+**Context**: Phase 2 adds navigation aids (landmarks, path finding, recent activity, visualization) to help users re-orient after being away from their map.
+
+**Options for "where was I?"**:
+1. **Session tracking** — Automatically record what you were exploring; offer "resume"
+2. **Manual bookmarks** — User explicitly marks "come back to this"
+3. **Both** — Automatic tracking plus manual bookmarks
+
+**Questions to explore**:
+- When you return to a project after weeks/months, how do you currently re-orient?
+- Would automatic "you were here" tracking be helpful or creepy?
+- What information helps most: last concepts viewed? Last notes written? Last books touched?
+
+**Decision needed**: Session tracking approach.
+
+---
+
+### Q8: How important is visualization?
 
 **Context**: Phase 2 plans graph visualization. But building good visualization is significant work.
 
@@ -120,7 +157,7 @@ Design questions to validate before committing to implementation decisions.
 
 ---
 
-### Q7: What import sources matter most?
+### Q9: What import sources matter most?
 
 **Phase 3 plans imports from**:
 - Obsidian vault
@@ -137,7 +174,7 @@ Design questions to validate before committing to implementation decisions.
 
 ---
 
-### Q8: Should Melvil suggest concepts from TOC?
+### Q10: Should Melvil suggest concepts from TOC?
 
 **Context**: When importing a book's TOC, Melvil could suggest concepts based on chapter titles.
 
@@ -155,7 +192,7 @@ Design questions to validate before committing to implementation decisions.
 
 ---
 
-### Q9: How should notes integrate with external tools?
+### Q11: How should notes integrate with external tools?
 
 **Context**: Many users have existing note systems (Obsidian, Notion, etc.).
 
@@ -175,7 +212,7 @@ Design questions to validate before committing to implementation decisions.
 
 ## Validation Questions (User Research)
 
-### Q10: Is this the right problem?
+### Q12: Is this the right problem?
 
 **Core assumption**: Readers building expertise need help externalizing and navigating their concept map.
 
@@ -192,7 +229,7 @@ Design questions to validate before committing to implementation decisions.
 
 ---
 
-### Q11: Is CLI the right interface?
+### Q13: Is CLI the right interface?
 
 **Current assumption**: Target users are comfortable with command-line tools.
 
@@ -208,7 +245,7 @@ Design questions to validate before committing to implementation decisions.
 
 ---
 
-### Q12: Does the Zettelkasten framing resonate?
+### Q14: Does the Zettelkasten framing resonate?
 
 **Current assumption**: Framing notes as "fleeting/literature/permanent" is helpful.
 
@@ -233,13 +270,15 @@ Design questions to validate before committing to implementation decisions.
 | Q3: Map display | Not started | Mockup test | — |
 | Q4: Note linking | Not started | Interview | — |
 | Q5: Book-concept metadata | Not started | Interview | — |
-| Q6: Visualization | Not started | Interview | — |
-| Q7: Import sources | Not started | Survey | — |
-| Q8: Concept suggestions | Not started | Prototype | — |
-| Q9: External tools | Not started | Interview | — |
-| Q10: Problem validation | Not started | Interview | — |
-| Q11: CLI preference | Not started | Usability | — |
-| Q12: Zettelkasten framing | Not started | Interview | — |
+| Q6: Synthesis workflow | Not started | Interview | — |
+| Q7: Re-orientation aids | Not started | Interview | — |
+| Q8: Visualization | Not started | Interview | — |
+| Q9: Import sources | Not started | Survey | — |
+| Q10: Concept suggestions | Not started | Prototype | — |
+| Q11: External tools | Not started | Interview | — |
+| Q12: Problem validation | Not started | Interview | — |
+| Q13: CLI preference | Not started | Usability | — |
+| Q14: Zettelkasten framing | Not started | Interview | — |
 
 ---
 
