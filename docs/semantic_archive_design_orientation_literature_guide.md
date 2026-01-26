@@ -12,15 +12,18 @@ The focus is **semantic information**: meaning-rich material whose relevance dep
 
 ## Scope Note
 
-**This document describes the ideal end-state vision**, not current implementation scope.
+**This document describes conceptual foundations**, not current implementation.
 
-For what Melvil actually does today, see:
-- `SPEC_MVP.md` — Phase 1 implementation (synthesis workspace)
-- `SPEC_FULL.md` — Phased roadmap and current scope
+Melvil is now a **concept mapping system** for readers who build understanding by connecting ideas across sources. For current implementation:
+- `SPEC_MVP.md` — Phase 1: Concept mapping (books, concepts, notes)
+- `SPEC_FULL.md` — Full vision and phased roadmap
 
-The concepts here (5-layer semantic stack, knowledge graphs, multi-mode interaction) inform long-term direction. Many are not yet implemented and some may never be—design will evolve based on user feedback.
+The frameworks here (semantic retrieval, multi-mode interaction, provenance) inform design principles. The current implementation focuses specifically on:
+- **First-class concepts** that span multiple books
+- **Atomic notes** in Zettelkasten style
+- **Explicit concept links** (relationships between ideas)
 
-**Use this document to understand *why* design decisions are made, not *what* is being built.**
+**Use this document to understand the theoretical background, not as implementation guidance.**
 
 ---
 

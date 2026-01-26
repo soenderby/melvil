@@ -1,66 +1,122 @@
 # Melvil - Agent Guidelines
 
-This document provides context and guidelines for AI agents working on the Melvil codebase.
+Guidelines for AI agents working on the Melvil codebase.
 
 ## Project Overview
 
-**Melvil** is a semantic archive for learning-directed reading. It preserves sources, captures meaning in multiple forms, and helps users recompute relevance as their questions change. The MVP starts with a synthesis workspace for assembling sourced passages.
+**Melvil** is a concept mapping system for readers who learn by connecting ideas across sources. It externalizes the mental map that forms when reading broadly—tracking books, the concepts they contain, and how ideas relate.
 
 ### Core Value Proposition
-- Preserve sources with provenance and time awareness
-- Assemble passage-based syntheses with clear source links
-- Support iterative retrieval, inspection, and synthesis workflows
+- Track books with reading depth (listed → mapped → reading → read → deep)
+- Create first-class concepts that span multiple books
+- Link concepts to each other and to the books that discuss them
+- Write atomic notes (Zettelkasten-style) tied to concepts and sources
+- Navigate and export the concept map
+
+### Target User
+A reader who:
+- Reads broadly across many books and papers
+- Cannot possibly read everything end-to-end
+- Maps books shallowly first (TOC, key concepts)
+- Builds understanding through connections
+- Is familiar with Zettelkasten or networked-note methods
 
 ## Architecture
 
 ### Technology Stack
-- **Database**: SQLite (single file, zero infrastructure)
-- **Vector Search**: sqlite-vec
-- **LLM**: Claude API (summarization, concept extraction)
-- **Embeddings**: OpenAI text-embedding-3-small
-- **CLI**: Click + Rich
-- **Zotero**: Direct SQLite access + pyzotero
+- **Database**: SQLite (single file, FTS5 for search)
+- **CLI**: Click + Rich (Python)
+- **PDF parsing**: PyMuPDF (TOC extraction)
+- **Zotero**: Direct SQLite access + pyzotero API
+
+### Key Tables
+```
+books           -- Sources (books, papers, articles)
+chapters        -- Table of contents structure
+concepts        -- First-class ideas that span sources
+book_concepts   -- Links between books and concepts
+concept_links   -- Relationships between concepts
+notes           -- Atomic Zettelkasten-style notes
+note_links      -- Links between notes
+aliases         -- Short names for books
+```
 
 ### Key Files
 ```
 melvil/
 ├── docs/
-│   ├── SPEC_MVP.md        # MVP spec (synthesis workspace) - START HERE
-│   ├── SPEC_FULL.md       # Full system spec (all phases)
-│   ├── QUESTIONS.md       # Open design questions for user research
-│   ├── semantic_archive_design_orientation_literature_guide.md  # Conceptual foundations
-│   └── archive/           # Historical documents (reference only)
+│   ├── SPEC_MVP.md        # Phase 1 spec (concept mapping) - START HERE
+│   ├── SPEC_FULL.md       # Full system vision
+│   ├── QUESTIONS.md       # Open design questions
+│   ├── semantic_archive_design_orientation_literature_guide.md
+│   └── archive/           # Historical documents
 ├── AGENTS.md              # This file
-├── src/                   # Source code (when created)
+├── src/                   # Source code
 │   ├── cli.py             # CLI entry point
 │   ├── db.py              # SQLite operations
+│   ├── models.py          # Data models
 │   ├── zotero.py          # Zotero integration
-│   └── synthesize.py      # Synthesis workspace
+│   └── export.py          # Export functions
 └── tests/
 ```
 
 ## Development Phases
 
-1. **Synthesis Workspace (MVP)**: Minimal ingest + passage capture + assembly + export
-2. **Clarify + Correct**: Correction loop, term definitions, concept browsing
-3. **Retrieval Expansion**: FTS + embeddings, comparisons, interpretations
+1. **Phase 1: Concept Mapping (MVP)**
+   - Add books and capture TOC
+   - Create concepts with definitions
+   - Link concepts to books and each other
+   - Write atomic notes
+   - CLI map exploration and export
 
-## Agent Coordination
+2. **Phase 2: Deep Reading & Visualization**
+   - Passage capture with page-level provenance
+   - Full-text search within PDFs
+   - Graph visualization (TUI or web)
+   - Gap analysis and reading suggestions
 
-This project uses **MCP Agent Mail** for agent coordination.
+3. **Phase 3: Intelligence & Integration**
+   - LLM-assisted concept extraction
+   - Import from Obsidian, Roam, Kindle
+   - Export to Obsidian, Anki, Notion
 
-### When Starting Work
-1. Register with the project using `register_agent`
-2. Check inbox for any messages from other agents
-3. Reserve files you plan to modify using `file_reservation_paths`
+## Key Design Decisions
 
-### When Collaborating
-- Use `send_message` to communicate with other agents
-- Check `fetch_inbox` periodically for updates
-- Acknowledge important messages with `acknowledge_message`
+1. **Concepts are first-class** — Ideas exist independent of any single source
+2. **Shallow before deep** — Map a book's territory before reading deeply
+3. **Books have depth levels** — listed → mapped → reading → read → deep
+4. **Notes are atomic** — One idea per note, Zettelkasten style
+5. **Titles over IDs** — CLI uses `"DDIA"` not `42`
+6. **Zotero is optional** — Works standalone with manual book entry
 
-### File Ownership
-Before modifying files, check for existing reservations to avoid conflicts.
+## CLI Design Patterns
+
+### Commands use titles, not IDs
+```bash
+melvil show "DDIA"                    # Good
+melvil show 42                        # Avoid
+```
+
+### Aliases for frequently-used books
+```bash
+melvil alias "DDIA" "Designing Data-Intensive Applications"
+melvil show "DDIA"
+```
+
+### Concept commands
+```bash
+melvil concept "consensus"            # Create concept
+melvil concept show "consensus"       # Show details
+melvil concept link "consensus" --book "DDIA" --chapter 9
+melvil concept relate "consensus" "linearizability" --type related
+```
+
+### Note commands
+```bash
+melvil note --concept "consensus" "My insight about consensus..."
+melvil note --book "DDIA" --type literature "Summary of chapter 9..."
+melvil quote --book "DDIA" --location "p.324" "Exact quote..."
+```
 
 ## Code Style
 
@@ -68,56 +124,55 @@ Before modifying files, check for existing reservations to avoid conflicts.
 - Python 3.11+
 - Type hints required
 - Use `pydantic` for data models
-- Async where beneficial (LLM calls, I/O)
 - Format with `ruff`
 
-### CLI Design
-- Commands are verbs: `synthesize`, `add-source`, `add-passage`, `export`
-- Nouns are titles, not IDs: `melvil synth add-source "DDIA"`
-- Output is scannable: sources, page refs, provenance
-- Fast: common queries < 500ms
-
 ### Database
-- SQLite only (no external databases in Phase 1-3)
-- Use JSON columns for arrays
-- FTS5 and sqlite-vec added in Phase 3
+- SQLite only (single file)
+- JSON columns for arrays (authors, aliases, identifiers)
+- Foreign keys with ON DELETE CASCADE
+- Case-insensitive COLLATE NOCASE for names
 
-## Key Design Decisions
-
-1. **Zotero is source of truth** — Melvil enriches, doesn't replace
-2. **Capture first, structure progressively** — Start with sources and passages
-3. **Provenance-first** — Every derived artifact links back to sources
-4. **No black-box recommendations** — Retrieval is inspectable and iterative
-5. **User agency** — Show information, let users decide
-
-## Testing
-
-- Unit tests for core logic
-- Integration tests for Zotero sync
-- CLI tests using Click's test runner
+### CLI
+- Commands are verbs: `add`, `show`, `link`, `relate`
+- Flags for modifiers: `--type`, `--book`, `--concept`
+- Output via Rich for formatting
 
 ## Common Tasks
 
-### Adding a new CLI command
+### Adding a CLI command
 1. Add command function in `src/cli.py`
 2. Use `@click.command()` decorator
 3. Add to appropriate command group
-4. Update `docs/SPEC_MVP.md` or `docs/SPEC_FULL.md` if significant
+4. Update docs if significant
 
-### Adding LLM functionality
-1. Define prompt in `src/prompts/`
-2. Use structured output parsing
-3. Cache responses where appropriate
-4. Handle rate limits gracefully
+### Adding a database table
+1. Add CREATE TABLE to `src/db.py`
+2. Add indexes for common queries
+3. Add model class if using pydantic
+4. Update SPEC_MVP.md schema section
 
-### Modifying the database schema
-1. Update schema in `src/db.py`
-2. Add migration if needed
-3. Update `docs/SPEC_FULL.md`
+### Testing
+- Unit tests for core logic
+- Integration tests for database operations
+- CLI tests using Click's CliRunner
+
+## Agent Coordination
+
+This project uses **MCP Agent Mail** for agent coordination.
+
+### When Starting Work
+1. Register with the project using `register_agent`
+2. Check inbox for messages from other agents
+3. Reserve files you plan to modify using `file_reservation_paths`
+
+### When Collaborating
+- Use `send_message` to communicate with other agents
+- Check `fetch_inbox` periodically for updates
+- Acknowledge important messages with `acknowledge_message`
 
 ## Resources
 
-- **Full System Spec**: `docs/SPEC_FULL.md`
-- **MVP Spec**: `docs/SPEC_MVP.md`
-- **Orientation Guide**: `docs/semantic_archive_design_orientation_literature_guide.md`
-- **Adler's Framework**: "How to Read a Book" — Conceptual foundation
+- **MVP Spec**: `docs/SPEC_MVP.md` — Start here
+- **Full Vision**: `docs/SPEC_FULL.md`
+- **Open Questions**: `docs/QUESTIONS.md`
+- **Zettelkasten Reference**: Ahrens, "How to Take Smart Notes"

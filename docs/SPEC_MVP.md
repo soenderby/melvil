@@ -1,159 +1,233 @@
-# Melvil MVP Spec (Synthesis Workspace)
+# Melvil MVP Spec (Concept Mapping)
 
 ## Purpose
 
-Deliver immediate value by helping users **find, capture, and synthesize** passages from their reading. The MVP provides a synthesis workspace with passage search, explicit provenance, and structured export.
+Melvil helps readers **map concepts across books** to build understanding incrementally. It externalizes the mental map that forms when reading broadly, tracking which books cover which concepts and how ideas connect.
+
+The system supports the workflow of a reader who:
+- Reads broadly across many books
+- Cannot read everything end-to-end
+- Maps books shallowly first (TOC, key concepts)
+- Builds a concept graph that spans sources
+- Dives deeper selectively based on the map
+- Takes atomic notes in a Zettelkasten style
 
 ---
 
 ## MVP Goals
 
-1. **Index materials** for full-text search within the workspace.
-2. **Find passages** across indexed materials using text search.
-3. **Capture passages** with stable source references.
-4. **Assemble excerpts** into a structured synthesis with notes.
-5. **Export** the workspace to Markdown with full provenance.
+1. **Track books** with metadata, TOC, and reading depth.
+2. **Map concepts** as first-class entities that span multiple books.
+3. **Link concepts** to each other and to the books that discuss them.
+4. **Write atomic notes** tied to concepts and/or specific sources.
+5. **Explore the map** to see what books cover a concept and how concepts relate.
 
 ---
 
 ## Non-Goals (MVP)
 
-- Automated recommendations or relevance scoring.
-- Semantic/embedding-based search (Phase 2).
-- Concept extraction, term definitions, or argument maps (Phase 2).
-- Cross-library search beyond the current workspace (Phase 2).
-- Mobile capture or import from Kindle/Readwise (Phase 2).
+- Graph visualization (Phase 2)
+- Reading suggestions based on concept gaps (Phase 2)
+- Full-text search within PDFs (Phase 2)
+- Passage-level capture with page references (Phase 2)
+- Import from existing Zettelkasten tools (Phase 2)
+- Spaced repetition or review workflows (Future)
 
 ---
 
-## Primary Workflow
+## Core Concepts
 
-1. **Create workspace** for a topic or question.
-2. **Add sources** from Zotero or manual entry.
-3. **Index sources** to enable full-text search.
-4. **Find passages** using text search across indexed sources.
-5. **Capture passages** from search results or manual entry.
-6. **Add notes** (thesis, terms, arguments, interpretations).
-7. **Assemble** passages and notes into a working outline.
-8. **Export** the synthesis to Markdown.
+### The Map
+
+The central data structure is a **concept map**:
+
+```
+                    ┌─────────────┐
+                    │  Concepts   │
+                    │ (nodes)     │
+                    └──────┬──────┘
+                           │
+         ┌─────────────────┼─────────────────┐
+         │                 │                 │
+         ▼                 ▼                 ▼
+    ┌─────────┐      ┌──────────┐      ┌─────────┐
+    │ Links   │      │  Notes   │      │ Books   │
+    │(edges)  │      │ (atoms)  │      │(sources)│
+    └─────────┘      └──────────┘      └─────────┘
+```
+
+- **Concepts** are ideas that span multiple books (e.g., "CAP theorem", "consensus", "linearizability")
+- **Books** are sources that discuss concepts
+- **Links** connect concepts to each other (related, contradicts, prerequisite, etc.)
+- **Notes** are atomic thoughts tied to concepts and/or sources
+
+### Reading Depth
+
+Books have a **depth level** indicating how thoroughly they've been engaged:
+
+| Depth | Meaning |
+|-------|---------|
+| `listed` | In the system but not yet examined |
+| `mapped` | TOC reviewed, key concepts identified |
+| `reading` | Currently being read |
+| `read` | Read through, concepts and notes captured |
+| `deep` | Studied deeply, passages extracted |
+
+### Atomic Notes (Zettelkasten)
+
+Notes follow Zettelkasten principles:
+- **Atomic**: One idea per note
+- **Linked**: Connected to concepts and sources
+- **Authored**: Your own words, not just quotes
+- **Addressable**: Each note has a unique ID for cross-reference
 
 ---
 
 ## Data Model
 
-### Materials
+### Books
 
 ```sql
-materials (
+books (
   id INTEGER PRIMARY KEY,
-  type TEXT NOT NULL,           -- 'book', 'paper', 'article'
   title TEXT NOT NULL,
-  authors TEXT,                 -- JSON array of author names
+  authors TEXT,                 -- JSON array
   year INTEGER,
-  identifiers TEXT,             -- JSON: {isbn, doi, arxiv, etc.}
-  zotero_key TEXT,              -- Link to Zotero item (if imported)
-  content_path TEXT,            -- Path to PDF/EPUB (if available)
+  type TEXT DEFAULT 'book',     -- 'book', 'paper', 'article'
+
+  -- External references
+  zotero_key TEXT,
+  identifiers TEXT,             -- JSON: {isbn, doi, arxiv}
+
+  -- Reading state
+  depth TEXT DEFAULT 'listed',  -- 'listed', 'mapped', 'reading', 'read', 'deep'
+
+  -- User's high-level notes on this book
+  about TEXT,                   -- "What is this book about?" (your words)
+
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 )
 ```
 
-### Source Snapshots
-
-A source snapshot captures the state of a material at a specific point in time. This enables passages to reference a specific edition even if the user later acquires a different version.
+### Chapters (TOC)
 
 ```sql
-source_snapshots (
+chapters (
   id INTEGER PRIMARY KEY,
-  material_id INTEGER NOT NULL REFERENCES materials(id),
-  captured_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  book_id INTEGER NOT NULL REFERENCES books(id),
 
-  -- What was captured
-  source_type TEXT NOT NULL,    -- 'pdf', 'epub', 'metadata_only'
-  file_path TEXT,               -- Path at capture time (may move later)
-  file_hash TEXT,               -- SHA-256 of file content (NULL if no file)
+  -- Structure
+  number TEXT,                  -- "1", "2.3", "IV", etc.
+  title TEXT NOT NULL,
+  parent_id INTEGER REFERENCES chapters(id),
+  position INTEGER,             -- For ordering
 
-  -- Metadata snapshot (Zotero data at capture time)
-  metadata_snapshot TEXT,       -- JSON of metadata at capture
-
-  -- Edition tracking
-  edition_info TEXT             -- User note: "2nd ed", "Kindle", ISBN, etc.
-)
-```
-
-### Passages
-
-```sql
-passages (
-  id INTEGER PRIMARY KEY,
-  material_id INTEGER NOT NULL REFERENCES materials(id),
-  source_snapshot_id INTEGER NOT NULL REFERENCES source_snapshots(id),
-
-  -- Location
+  -- Optional metadata
   page_start INTEGER,
   page_end INTEGER,
-  chapter TEXT,                 -- Optional chapter name/number
 
-  -- Content
-  text TEXT NOT NULL,
-
-  -- Tracking
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+  -- User annotation
+  summary TEXT,                 -- Your summary of this chapter
+  relevance TEXT                -- Why this chapter matters to you
 )
 ```
 
-### Synthesis Projects
+### Concepts
 
 ```sql
-synthesis_projects (
+concepts (
   id INTEGER PRIMARY KEY,
-  topic TEXT NOT NULL,
-  guiding_questions TEXT,       -- JSON array of questions
-  status TEXT DEFAULT 'active', -- 'active', 'paused', 'completed'
+  name TEXT NOT NULL UNIQUE,
+
+  -- Optional normalization
+  aliases TEXT,                 -- JSON array: ["CAP", "Brewer's theorem"]
+
+  -- User's understanding
+  definition TEXT,              -- Your working definition
+
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 )
 ```
 
-### Synthesis Items
+### Concept-Book Links
 
 ```sql
-synthesis_items (
+book_concepts (
   id INTEGER PRIMARY KEY,
-  synthesis_id INTEGER NOT NULL REFERENCES synthesis_projects(id),
-  item_type TEXT NOT NULL,      -- 'passage', 'thesis', 'term', 'argument', 'interpretation', 'note'
+  book_id INTEGER NOT NULL REFERENCES books(id),
+  concept_id INTEGER NOT NULL REFERENCES concepts(id),
 
-  -- For passages: reference to captured passage
-  passage_id INTEGER REFERENCES passages(id),
+  -- Where in the book
+  chapter_id INTEGER REFERENCES chapters(id),
+  location TEXT,                -- "Chapter 9", "pp. 300-350", etc.
 
-  -- For notes: inline text
-  note_text TEXT,
+  -- How the book treats this concept
+  treatment TEXT,               -- 'introduces', 'discusses', 'applies', 'critiques'
+  importance TEXT,              -- 'central', 'significant', 'mentioned'
 
-  -- Ordering within synthesis
-  position INTEGER,
+  -- Your notes on this specific treatment
+  notes TEXT,
 
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+  UNIQUE(book_id, concept_id)
 )
 ```
 
-### Full-Text Search Index (Workspace-Scoped)
-
-FTS5 virtual table for searching within a synthesis workspace. Cross-library search is Phase 2.
+### Concept Links (Graph Edges)
 
 ```sql
--- FTS index for passage text within indexed materials
-passage_fts (
-  passage_id INTEGER,
-  material_id INTEGER,
-  text TEXT
-)
+concept_links (
+  id INTEGER PRIMARY KEY,
+  from_concept_id INTEGER NOT NULL REFERENCES concepts(id),
+  to_concept_id INTEGER NOT NULL REFERENCES concepts(id),
 
--- FTS index for synthesis items (passages + notes)
-synthesis_fts (
-  synthesis_id INTEGER,
-  item_id INTEGER,
-  item_type TEXT,
-  text TEXT
+  -- Relationship type
+  link_type TEXT NOT NULL,      -- 'related', 'prerequisite', 'contradicts', 'specializes', 'generalizes'
+
+  -- Explanation
+  notes TEXT,
+
+  UNIQUE(from_concept_id, to_concept_id, link_type)
+)
+```
+
+### Notes (Zettelkasten Atoms)
+
+```sql
+notes (
+  id INTEGER PRIMARY KEY,
+
+  -- Content
+  title TEXT,                   -- Optional short title
+  body TEXT NOT NULL,           -- The note content (Markdown)
+
+  -- Connections (all optional)
+  concept_id INTEGER REFERENCES concepts(id),
+  book_id INTEGER REFERENCES books(id),
+  chapter_id INTEGER REFERENCES chapters(id),
+
+  -- For quotes/passages (Phase 2 will expand this)
+  source_location TEXT,         -- "DDIA p.336", "Ch. 9", etc.
+  is_quote BOOLEAN DEFAULT FALSE,
+
+  -- Zettelkasten metadata
+  note_type TEXT DEFAULT 'permanent', -- 'fleeting', 'literature', 'permanent'
+
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+)
+```
+
+### Note Links
+
+```sql
+note_links (
+  id INTEGER PRIMARY KEY,
+  from_note_id INTEGER NOT NULL REFERENCES notes(id),
+  to_note_id INTEGER NOT NULL REFERENCES notes(id),
+
+  UNIQUE(from_note_id, to_note_id)
 )
 ```
 
@@ -162,291 +236,390 @@ synthesis_fts (
 ```sql
 aliases (
   id INTEGER PRIMARY KEY,
-  alias TEXT NOT NULL UNIQUE,   -- e.g., "DDIA"
-  material_id INTEGER NOT NULL REFERENCES materials(id)
+  alias TEXT NOT NULL UNIQUE,
+  book_id INTEGER NOT NULL REFERENCES books(id)
 )
-```
-
----
-
-## Title Resolution
-
-The CLI uses titles (not IDs) as identifiers. Resolution order:
-
-1. **Exact alias match** (case-insensitive): `"DDIA"` → material with that alias
-2. **Exact title match** (case-insensitive): `"Designing Data-Intensive Applications"`
-3. **Prefix match**: `"Designing Data"` → matches if unique
-4. **Fuzzy match**: Trigram similarity > 0.6
-
-**Multiple matches**: Prompt user to select with numbered list.
-
-**No match**: Suggest closest matches or offer manual entry.
-
-```bash
-$ melvil show "designing"
-
-Multiple matches for "designing":
-  1. Designing Data-Intensive Applications (Kleppmann, 2017)
-  2. Designing Distributed Systems (Burns, 2018)
-
-Select [1-2] or enter full title:
-```
-
-**Setting aliases**:
-```bash
-$ melvil alias "DDIA" "Designing Data-Intensive Applications"
-Alias set: DDIA → Designing Data-Intensive Applications
 ```
 
 ---
 
 ## CLI Surface
 
-### Workspace Management
+### Book Management
 
 ```bash
-# Create a new synthesis workspace
-melvil synthesize "consistency models"
+# Add a book
+melvil add "Designing Data-Intensive Applications" --author "Kleppmann" --year 2017
+melvil add "DDIA" --from-zotero
 
-# View workspace status
-melvil synth show "consistency models"
-
-# List all workspaces
-melvil synth list
-```
-
-### Source Management
-
-```bash
-# Add source from Zotero (by title)
-melvil synth add-source "DDIA"
-
-# Add source manually
-melvil synth add-source --manual "Paxos Made Simple" --authors "Lamport" --year 2001
-
-# Index a source for full-text search
-melvil synth index "DDIA"
-
-# Set a title alias
+# Set an alias for quick reference
 melvil alias "DDIA" "Designing Data-Intensive Applications"
+
+# View book details
+melvil show "DDIA"
+
+# Update reading depth
+melvil depth "DDIA" mapped
+melvil depth "DDIA" reading
+
+# Add your summary of what the book is about
+melvil about "DDIA" "Comprehensive guide to distributed systems from a data perspective. Covers storage, replication, partitioning, transactions, and stream processing."
+
+# List books
+melvil books                    # All books
+melvil books --depth mapped     # Only mapped books
+melvil books --concept "consensus"  # Books covering a concept
 ```
 
-### Finding Passages
+### TOC Management
 
 ```bash
-# Search indexed sources in current workspace
-melvil synth find "CAP theorem"
+# View table of contents (if captured)
+melvil toc "DDIA"
 
-# Search within a specific source
-melvil synth find "consistency" --in "DDIA"
+# Add chapters manually
+melvil toc add "DDIA" --number 9 --title "Consistency and Consensus" --pages 321-374
 
-# Show context around matches
-melvil synth find "linearizability" --context 3
+# Import TOC from PDF (extracts outline if available)
+melvil toc import "DDIA" --from-pdf
+
+# Add your summary to a chapter
+melvil toc summarize "DDIA" --chapter 9 "Covers linearizability, consensus algorithms, and the relationship between them."
 ```
 
-### Capturing Passages
+### Concept Management
 
 ```bash
-# Capture from search result (by result number)
-melvil synth capture 1
+# Create a concept
+melvil concept "CAP theorem"
+melvil concept "linearizability" --definition "A consistency model where operations appear atomic and ordered"
 
-# Capture by page range with text extraction from PDF
-melvil synth capture "DDIA" --page 323-325 --from-pdf
+# Add aliases
+melvil concept alias "CAP theorem" "Brewer's theorem" "CAP"
 
-# Capture with manual text entry
-melvil synth capture "DDIA" --page 323-325 --text "The CAP theorem..."
+# Link a concept to a book
+melvil concept link "CAP theorem" --book "DDIA" --chapter 9 --treatment discusses --importance central
 
-# Capture with chapter reference
-melvil synth capture "DDIA" --chapter 9 --page 323-325 --from-pdf
+# Link concepts to each other
+melvil concept relate "linearizability" "serializability" --type related --note "Often confused but different"
+melvil concept relate "consensus" "linearizability" --type prerequisite
+
+# View a concept
+melvil concept show "CAP theorem"
+
+# List all concepts
+melvil concepts
+melvil concepts --book "DDIA"   # Concepts from a specific book
 ```
 
-### Adding Notes
+### Note Management
 
 ```bash
-# Add thesis note
-melvil synth note --type thesis "Consistency requires explicit tradeoffs between availability and partition tolerance."
+# Create a note on a concept
+melvil note --concept "CAP theorem" "The 'pick 2 of 3' framing is misleading. Partitions aren't optional—the real choice is between consistency and availability during a partition."
 
-# Add term definition
-melvil synth note --type term "Linearizability: appears as if only one copy of data exists, all operations atomic."
+# Create a note on a book/chapter
+melvil note --book "DDIA" --chapter 9 "Kleppmann's treatment of consensus is clearer than most. Good bridge from theory to practice."
 
-# Add argument
-melvil synth note --type argument "CAP implies partitions force choice between latency and staleness."
+# Create a note with source location
+melvil note --concept "CAP theorem" --book "DDIA" --location "p.336" "Kleppmann argues CAP is 'unfortunate' terminology."
 
-# Add interpretation
-melvil synth note --type interpretation "Kleppmann treats CAP as availability warning, not hard constraint."
+# Create a literature note (summarizing source) vs permanent note (your thinking)
+melvil note --book "DDIA" --type literature "Summary of chapter 9: covers consistency models, linearizability vs serializability, distributed transactions, consensus."
+melvil note --concept "consensus" --type permanent "Consensus and linearizability are deeply connected: implementing one gives you the other."
 
-# Add general note
-melvil synth note "Need to compare with Brewer's original formulation."
+# Add a quote
+melvil quote --book "DDIA" --location "p.324" "Linearizability is a recency guarantee: once a read returns a value, all subsequent reads must return that value or a later one."
+
+# Link notes to each other
+melvil note link 42 57          # Link note #42 to note #57
+
+# View and search notes
+melvil notes                    # Recent notes
+melvil notes --concept "CAP theorem"
+melvil notes --book "DDIA"
+melvil notes search "consensus"
 ```
 
-### Assembly and Export
+### Exploring the Map
 
 ```bash
-# Reorder items in workspace
-melvil synth reorder
+# See what books cover a concept
+melvil map --concept "consensus"
 
-# Export to Markdown
-melvil synth export "consistency models"
+# See what concepts a book covers
+melvil map --book "DDIA"
 
-# Export to specific file
-melvil synth export "consistency models" --output ./notes/consistency.md
+# See concepts related to a concept
+melvil map --related "linearizability"
+
+# See the full concept graph (text representation)
+melvil map
+
+# Export the map
+melvil export map --format markdown
+melvil export map --format json
 ```
 
 ---
 
-## Passage Capture Flow
+## Workflows
 
-### From PDF (`--from-pdf`)
+### Workflow 1: Map a New Book
 
-1. **Locate file**: Find PDF path from material record or source snapshot.
-2. **Extract text**: Use PDF library to extract text from specified page range.
-3. **Display for editing**: Show extracted text in `$EDITOR` (or inline if no editor).
-4. **User confirms**: User edits text if needed, saves and exits editor.
-5. **Create snapshot**: If no snapshot exists for this file, create one with file hash.
-6. **Save passage**: Store passage with source_snapshot_id and page reference.
+```bash
+# 1. Add the book
+$ melvil add "DDIA" --from-zotero
+Added: Designing Data-Intensive Applications (Kleppmann, 2017)
 
-**Fallback behaviors**:
-- **No PDF available**: Error with message "No PDF found for [title]. Use --text for manual entry."
-- **Extraction fails**: Warn "Text extraction failed (scanned PDF?). Opening blank editor for manual entry."
-- **Low-quality extraction**: Show extracted text with warning "Extraction may be incomplete. Please verify."
+# 2. Import or add TOC
+$ melvil toc import "DDIA" --from-pdf
+Imported 12 chapters from PDF outline.
 
-### Manual Entry (`--text`)
+# 3. Note what the book is about
+$ melvil about "DDIA" "Comprehensive treatment of distributed data systems..."
 
-1. **Validate source**: Confirm material exists, prompt to add if not.
-2. **Create snapshot**: Create metadata-only snapshot if none exists.
-3. **Save passage**: Store with page reference and provided text.
+# 4. Identify key concepts and link them
+$ melvil concept link "replication" --book "DDIA" --chapter 5 --importance central
+$ melvil concept link "partitioning" --book "DDIA" --chapter 6 --importance central
+$ melvil concept link "transactions" --book "DDIA" --chapter 7 --importance central
+$ melvil concept link "consensus" --book "DDIA" --chapter 9 --importance central
 
-### From Search Result (`capture <number>`)
+# 5. Mark as mapped
+$ melvil depth "DDIA" mapped
+```
 
-1. **Reference search result**: Use passage location from search result.
-2. **Expand context**: Optionally show surrounding text for user to adjust boundaries.
-3. **Save passage**: Store with automatic source_snapshot_id from indexed source.
+### Workflow 2: Build Concept Understanding
+
+```bash
+# 1. Create concept with working definition
+$ melvil concept "linearizability" --definition "Operations appear to execute atomically at a single point in time"
+
+# 2. Link to books that discuss it
+$ melvil concept link "linearizability" --book "DDIA" --chapter 9 --treatment discusses
+$ melvil concept link "linearizability" --book "Database Internals" --chapter 11 --treatment introduces
+
+# 3. Relate to other concepts
+$ melvil concept relate "linearizability" "serializability" --type related
+$ melvil concept relate "linearizability" "consensus" --type related
+
+# 4. Add notes as you learn
+$ melvil note --concept "linearizability" "Key insight: linearizability is about single-object operations, serializability is about multi-object transactions."
+
+# 5. See the full picture
+$ melvil concept show "linearizability"
+```
+
+### Workflow 3: Decide What to Read Next
+
+```bash
+# See which concepts you've mapped but not read deeply
+$ melvil concepts --shallow
+
+# See which books cover a concept you want to understand
+$ melvil map --concept "consensus"
+
+Books covering "consensus":
+  1. DDIA (Ch. 9) - discusses, central [mapped]
+  2. Database Internals (Ch. 14) - discusses, significant [listed]
+  3. Paxos Made Simple - introduces, central [listed]
+
+# Decide to read Paxos paper, mark it
+$ melvil depth "Paxos Made Simple" reading
+```
+
+---
+
+## Output Examples
+
+### `melvil show "DDIA"`
+
+```
+Designing Data-Intensive Applications
+═════════════════════════════════════
+Author: Martin Kleppmann
+Year: 2017
+Depth: mapped
+
+About:
+Comprehensive guide to distributed systems from a data perspective.
+Covers storage, replication, partitioning, transactions, and stream processing.
+
+Concepts (8):
+  • replication (Ch. 5) - central
+  • partitioning (Ch. 6) - central
+  • transactions (Ch. 7) - central
+  • consensus (Ch. 9) - central
+  • linearizability (Ch. 9) - significant
+  • serializability (Ch. 7) - significant
+  • CAP theorem (Ch. 9) - discussed
+  • eventual consistency (Ch. 5) - discussed
+
+Notes: 12
+```
+
+### `melvil concept show "consensus"`
+
+```
+consensus
+═════════
+Definition: Agreement among distributed nodes on a single value
+
+Aliases: distributed consensus, consensus protocol
+
+Related concepts:
+  → linearizability (related)
+  → Paxos (specializes)
+  → Raft (specializes)
+  → atomic broadcast (related)
+  ← fault tolerance (prerequisite)
+
+Books (4):
+  • DDIA, Ch. 9 - discusses, central [mapped]
+  • Database Internals, Ch. 14 - discusses [listed]
+  • Paxos Made Simple - introduces, central [listed]
+  • Raft paper - introduces, central [reading]
+
+Notes (3):
+  #42: "Consensus and total order broadcast are equivalent..."
+  #57: "FLP impossibility: no deterministic consensus in async system..."
+  #63: "Practical systems use timeouts to circumvent FLP..."
+```
+
+### `melvil map`
+
+```
+Concept Map (47 concepts, 12 books)
+═══════════════════════════════════
+
+distributed systems
+├── consensus
+│   ├── Paxos
+│   ├── Raft
+│   └── atomic broadcast
+├── replication
+│   ├── leader-follower
+│   ├── multi-leader
+│   └── leaderless
+├── consistency models
+│   ├── linearizability
+│   ├── serializability
+│   ├── eventual consistency
+│   └── causal consistency
+└── fault tolerance
+    ├── Byzantine faults
+    └── crash faults
+
+[47 concepts across 12 books, 156 notes]
+```
 
 ---
 
 ## Export Format
 
+### Markdown Export (`melvil export map`)
+
 ```markdown
-# [Topic]
+# Concept Map
 
-*Synthesis created: [date] | Last updated: [date]*
+*Exported from Melvil on 2024-01-15*
 
-## Guiding Questions
+## Books (12)
 
-1. [Question 1]
-2. [Question 2]
+### Designing Data-Intensive Applications
+- **Author**: Martin Kleppmann (2017)
+- **Depth**: mapped
+- **About**: Comprehensive guide to distributed systems...
+- **Concepts**: replication, partitioning, transactions, consensus, linearizability...
 
----
+### Database Internals
+...
 
-## Sources
+## Concepts (47)
 
-| # | Title | Author | Year |
-|---|-------|--------|------|
-| 1 | [Title] | [Authors] | [Year] |
-| 2 | [Title] | [Authors] | [Year] |
+### consensus
+- **Definition**: Agreement among distributed nodes on a single value
+- **Related**: linearizability, Paxos, Raft, atomic broadcast
+- **Books**: DDIA (Ch. 9), Database Internals (Ch. 14), Paxos Made Simple, Raft paper
 
----
+#### Notes
+1. Consensus and total order broadcast are equivalent...
+2. FLP impossibility: no deterministic consensus in async system...
 
-## Passages
+### linearizability
+...
 
-### 1. [First few words of passage...]
+## Notes (156)
 
-> [Full passage text]
+### #42: Consensus equivalence
+- **Concept**: consensus
+- **Source**: DDIA p.349
+- **Type**: permanent
 
-*Source: [Title], p. [page_start]-[page_end] ([edition_info])*
+Consensus and total order broadcast are equivalent problems...
 
-### 2. [First few words...]
-
-> [Passage text]
-
-*Source: [Title], Chapter [chapter], p. [page]*
-
----
-
-## Notes
-
-### Thesis
-
-[Thesis note text]
-
-### Key Terms
-
-- **[Term 1]**: [Definition]
-- **[Term 2]**: [Definition]
-
-### Arguments
-
-1. [Argument text]
-2. [Argument text]
-
-### Interpretations
-
-- [Interpretation text]
-- [Interpretation text]
-
-### Other Notes
-
-- [General note]
-
----
-
-*Exported from Melvil on [export date]*
+### #43: ...
 ```
 
 ---
 
 ## Acceptance Criteria
 
-### Core Workflow
-- [ ] User can create a workspace and add at least 3 sources in under 5 minutes.
-- [ ] User can index a PDF and search its contents.
-- [ ] `melvil synth find` returns results in under 1 second for 10k passages.
-- [ ] User can capture a passage with `--from-pdf` and edit before saving.
+### Books
+- [ ] User can add a book manually or from Zotero
+- [ ] User can set and view reading depth
+- [ ] User can add "about" summary to a book
+- [ ] User can import TOC from PDF or add manually
 
-### Provenance
-- [ ] Every passage displays source title and page reference.
-- [ ] Source snapshots include file hash when PDF is available.
-- [ ] Export preserves all source references.
+### Concepts
+- [ ] User can create concepts with definitions
+- [ ] User can link concepts to books with location and treatment
+- [ ] User can relate concepts to each other with typed links
+- [ ] `melvil concept show` displays full concept context
 
 ### Notes
-- [ ] Workspace includes at least one each: thesis, term, argument, interpretation.
-- [ ] Notes appear in export grouped by type.
+- [ ] User can create notes linked to concepts, books, or both
+- [ ] User can distinguish literature notes from permanent notes
+- [ ] User can link notes to each other
+- [ ] Notes are searchable by content
 
-### Export
-- [ ] Export produces valid Markdown that renders correctly.
-- [ ] Export includes all passages and notes with provenance.
-- [ ] Re-export after changes produces updated file.
+### Map
+- [ ] `melvil map` shows hierarchical concept view
+- [ ] `melvil map --concept X` shows books covering X
+- [ ] `melvil map --book X` shows concepts in X
+- [ ] Export produces valid Markdown
+
+### Performance
+- [ ] All commands respond in < 500ms for 100 books, 500 concepts, 1000 notes
 
 ---
 
 ## Phase 2 Preview
 
-The following are explicitly deferred to Phase 2:
-
-- **Semantic search**: Embedding-based similarity search across passages.
-- **Cross-library search**: Search all materials, not just workspace sources.
-- **Concept extraction**: LLM-assisted concept and term identification.
-- **Import sources**: Kindle highlights, Readwise, Apple Books.
-- **Correction loops**: User corrections to LLM-generated content.
-- **Term normalization**: Linking equivalent terms across sources.
+- **Graph visualization**: Interactive concept map in terminal (TUI) or web
+- **Passage capture**: Deep reading with page-level provenance
+- **Full-text search**: Search within indexed PDFs
+- **Gap analysis**: "You've mapped X but not read about Y which is prerequisite"
+- **Import**: Obsidian vault, Roam, existing Zettelkasten
+- **Export**: Obsidian, Notion, Anki
 
 ---
 
 ## Technical Notes
 
-### PDF Text Extraction
-- Use `pdfplumber` or `PyMuPDF` for text extraction.
-- Fall back gracefully for scanned PDFs (warn user, allow manual entry).
-- Cache extracted text to avoid re-processing.
+### SQLite
+- All data in single SQLite file
+- FTS5 for note search
+- JSON columns for arrays (authors, aliases, identifiers)
 
-### FTS Implementation
-- SQLite FTS5 with default tokenizer.
-- Index on passage creation; rebuild on `melvil synth index`.
-- Snippet generation for search results with `highlight()`.
+### PDF TOC Extraction
+- Use PyMuPDF to extract PDF outline
+- Fall back to manual entry if no outline
 
-### Performance Targets
-- Workspace creation: < 100ms
-- Add source (from Zotero): < 500ms
-- Index source (per 100 pages): < 5 seconds
-- Search (10k passages): < 500ms
-- Export (100 items): < 1 second
+### Zotero Integration
+- Read from local Zotero SQLite database
+- Map Zotero items to books table
+- Preserve zotero_key for sync
+
+### Title Resolution
+Same as before: alias → exact → prefix → fuzzy matching
