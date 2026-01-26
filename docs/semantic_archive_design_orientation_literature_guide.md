@@ -184,6 +184,130 @@ A successful system:
 
 ---
 
+## Design Anti-Patterns to Avoid
+
+The following recurring patterns undermine semantic archives by breaking the link between meaning, context, and use.
+
+### 1. Premature Ontology Freezing
+Locking categories, schemas, or taxonomies too early.
+- Leads to brittle systems
+- Forces future meaning into outdated frames
+- Encourages workarounds and shadow systems
+
+**Symptom:** users stop trusting or using formal structure.
+
+---
+
+### 2. Overconfident Summarization
+Treating summaries or generated answers as authoritative.
+- Hides uncertainty and disagreement
+- Breaks provenance
+- Encourages overtrust
+
+**Rule:** summaries orient; sources decide.
+
+---
+
+### 3. Single-Mode Interaction
+Designing only for search, chat, or dashboards.
+- Ignores how cognition shifts with task
+- Frustrates users during sensemaking
+
+**Rule:** support asking, browsing, inspecting, assembling.
+
+---
+
+### 4. Relevance as a Black Box
+Returning results without explanation.
+- Undermines trust
+- Prevents user calibration
+
+**Rule:** always show *why* something appeared.
+
+---
+
+### 5. Forgetting Time
+Overwriting past interpretations or decisions.
+- Loses learning
+- Creates false consistency
+
+**Rule:** preserve temporal slices and evolution of meaning.
+
+---
+
+### 6. Optimizing for Power Users Only
+Designing for experts while neglecting newcomers.
+- Raises onboarding cost
+- Shrinks adoption
+
+**Rule:** progressive disclosure of complexity.
+
+---
+
+## User Archetypes & Interaction Needs
+
+Different users seek different kinds of value from a semantic archive. The system should explicitly support all of them.
+
+### 1. The Explorer (Sensemaker)
+**Context:** new domain, new project, early research
+
+**Needs:**
+- Overviews and maps
+- Canonical documents
+- Visible disagreements
+
+**Primary Modes:** browsing, light asking
+
+---
+
+### 2. The Operator (Decision-Maker)
+**Context:** time pressure, real-world consequences
+
+**Needs:**
+- Precedents and cases
+- Arguments with evidence
+- Confidence bounds
+
+**Primary Modes:** asking, inspecting, assembling
+
+---
+
+### 3. The Analyst (Deep Thinker)
+**Context:** research, strategy, synthesis
+
+**Needs:**
+- Cross-domain connections
+- Historical evolution
+- Ability to compare frames
+
+**Primary Modes:** browsing, assembling, inspecting
+
+---
+
+### 4. The Archivist (Steward)
+**Context:** long-term maintenance, governance
+
+**Needs:**
+- Provenance and versioning
+- Structural consistency
+- Signals of decay or drift
+
+**Primary Modes:** contributing, inspecting
+
+---
+
+### 5. The Contributor (Expert)
+**Context:** adding or refining meaning
+
+**Needs:**
+- Low-friction annotation
+- Ability to dispute or qualify claims
+- Recognition of contributions
+
+**Primary Modes:** contributing, assembling
+
+---
+
 ## Intended Use of This Document
 
 This document should be used to:
@@ -193,3 +317,4 @@ This document should be used to:
 - Anchor technical decisions in epistemic and human considerations
 
 It is a **living orientation**, not a final specification.
+
