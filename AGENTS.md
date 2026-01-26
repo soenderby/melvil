@@ -4,13 +4,12 @@ This document provides context and guidelines for AI agents working on the Melvi
 
 ## Project Overview
 
-**Melvil** is a learning-directed knowledge management system that helps readers decide what to read based on their learning goals. It automates "inspectional reading" at scale—generating summaries, extracting concepts, and recommending relevant materials and chapters.
+**Melvil** is a semantic archive for learning-directed reading. It preserves sources, captures meaning in multiple forms, and helps users recompute relevance as their questions change. The MVP starts with a synthesis workspace for assembling sourced passages.
 
 ### Core Value Proposition
-- Sync with Zotero libraries
-- Generate multi-level summaries via LLM
-- Score material relevance against learning goals
-- Recommend specific chapters, not just books
+- Preserve sources with provenance and time awareness
+- Assemble passage-based syntheses with clear source links
+- Support iterative retrieval, inspection, and synthesis workflows
 
 ## Architecture
 
@@ -25,23 +24,24 @@ This document provides context and guidelines for AI agents working on the Melvi
 ### Key Files
 ```
 melvil/
-├── design.md              # Full system design document
+├── docs/SPEC_FULL.md      # Full system spec (semantic archive)
+├── docs/SPEC_MVP.md       # MVP spec (synthesis workspace)
+├── docs/README.md         # Docs index
+├── docs/semantic_archive_design_orientation_literature_guide.md  # Orientation
 ├── AGENTS.md              # This file
 ├── src/                   # Source code (when created)
 │   ├── cli.py             # CLI entry point
 │   ├── db.py              # SQLite operations
 │   ├── zotero.py          # Zotero integration
-│   ├── enrich.py          # LLM summarization
-│   └── relevance.py       # Scoring and recommendations
+│   └── synthesize.py       # Synthesis workspace (planned)
 └── tests/
 ```
 
 ## Development Phases
 
-1. **Librarian** (MVP): Add, sync, summarize, search
-2. **Advisor**: Goals, relevance scoring, recommendations
-3. **Guide**: Chapter-level analysis, reading plans
-4. **Cartographer**: Prerequisites, knowledge graphs (future)
+1. **Synthesis Workspace (MVP)**: Minimal ingest + passage capture + assembly + export
+2. **Clarify + Correct**: Correction loop, term definitions, concept browsing
+3. **Retrieval Expansion**: FTS + embeddings, comparisons, interpretations
 
 ## Agent Coordination
 
@@ -70,23 +70,22 @@ Before modifying files, check for existing reservations to avoid conflicts.
 - Format with `ruff`
 
 ### CLI Design
-- Commands are verbs: `add`, `sync`, `show`, `search`
-- Nouns are titles, not IDs: `melvil show "DDIA"`
-- Output is scannable: percentages, clear verdicts
+- Commands are verbs: `synthesize`, `add-source`, `add-passage`, `export`
+- Nouns are titles, not IDs: `melvil synth add-source "DDIA"`
+- Output is scannable: sources, page refs, provenance
 - Fast: common queries < 500ms
 
 ### Database
 - SQLite only (no external databases in Phase 1-3)
 - Use JSON columns for arrays
-- FTS5 for full-text search
-- sqlite-vec for vector similarity
+- FTS5 and sqlite-vec added in Phase 3
 
 ## Key Design Decisions
 
 1. **Zotero is source of truth** — Melvil enriches, doesn't replace
-2. **Metadata-first** — Full PDFs optional, not required
-3. **CLI-first** — No web UI until proven necessary
-4. **Simple scoring** — Cosine similarity + concept overlap, not elaborate formulas
+2. **Capture first, structure progressively** — Start with sources and passages
+3. **Provenance-first** — Every derived artifact links back to sources
+4. **No black-box recommendations** — Retrieval is inspectable and iterative
 5. **User agency** — Show information, let users decide
 
 ## Testing
@@ -101,7 +100,7 @@ Before modifying files, check for existing reservations to avoid conflicts.
 1. Add command function in `src/cli.py`
 2. Use `@click.command()` decorator
 3. Add to appropriate command group
-4. Update design.md if significant
+4. Update `docs/SPEC_MVP.md` or `docs/SPEC_FULL.md` if significant
 
 ### Adding LLM functionality
 1. Define prompt in `src/prompts/`
@@ -112,9 +111,11 @@ Before modifying files, check for existing reservations to avoid conflicts.
 ### Modifying the database schema
 1. Update schema in `src/db.py`
 2. Add migration if needed
-3. Update design.md Appendix A
+3. Update `docs/SPEC_FULL.md`
 
 ## Resources
 
-- **Design Document**: `design.md` — Full system specification
+- **Full System Spec**: `docs/SPEC_FULL.md`
+- **MVP Spec**: `docs/SPEC_MVP.md`
+- **Orientation Guide**: `docs/semantic_archive_design_orientation_literature_guide.md`
 - **Adler's Framework**: "How to Read a Book" — Conceptual foundation
