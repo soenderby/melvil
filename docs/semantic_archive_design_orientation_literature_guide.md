@@ -10,6 +10,20 @@ The focus is **semantic information**: meaning-rich material whose relevance dep
 
 ---
 
+## Scope Note
+
+**This document describes the ideal end-state vision**, not current implementation scope.
+
+For what Melvil actually does today, see:
+- `SPEC_MVP.md` — Phase 1 implementation (synthesis workspace)
+- `SPEC_FULL.md` — Phased roadmap and current scope
+
+The concepts here (5-layer semantic stack, knowledge graphs, multi-mode interaction) inform long-term direction. Many are not yet implemented and some may never be—design will evolve based on user feedback.
+
+**Use this document to understand *why* design decisions are made, not *what* is being built.**
+
+---
+
 ## Core Problem Statement
 
 The challenge is not storing information, but **preserving and reactivating meaning**.

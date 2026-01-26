@@ -1,270 +1,361 @@
-# Melvil Full System Spec (Semantic Archive)
+# Melvil System Spec
 
 ## Purpose
-Melvil is a **semantic archive** for learning-directed reading. It preserves sources, captures meaning in multiple forms, and helps users recompute relevance as their questions change. This spec consolidates prior designs and orients the system around the semantic archive principles.
 
-This document is the full-system product and technical reference. The MVP spec lives in `docs/SPEC_MVP.md`. Other documents are archived for context.
+Melvil is a **semantic archive** for learning-directed reading. It preserves sources, captures meaning in multiple forms, and helps users recompute relevance as their questions change.
+
+This document describes the full system across all phases. For MVP-specific details, see `SPEC_MVP.md`.
 
 ---
 
-## Core Problem Statement
+## Core Problem
+
 The challenge is not storing information, but **preserving and reactivating meaning**.
 
 Key constraints:
 - Relevance is contextual and question-dependent.
-- Meaning is social, embodied, time-dependent, and contested.
-- No single representational scheme is sufficient.
+- Meaning evolves over time and varies by reader.
+- No single representation captures everything.
 
 Therefore, Melvil must support:
 - Multiple representations of the same material
 - Question-driven, iterative retrieval
-- Transparency, provenance, and temporal awareness
+- Transparency and provenance
+- Evolution of understanding over time
 
 ---
 
-## Guiding Design Principles
+## Design Principles
 
-1. **Capture first, structure progressively**
-2. **Pluralism of representations** (text, metadata, embeddings, graphs, narratives)
-3. **Provenance and inspectability** for every derived artifact
-4. **Retrieval as a process**, not a single query
-5. **Uncertainty and disagreement are preserved**
-
-Summaries and derived outputs **orient**; sources decide.
+1. **Capture first, structure progressively** — Preserve raw sources; let structure emerge.
+2. **Provenance and inspectability** — Every derived artifact traces to sources.
+3. **Retrieval as a process** — Support iteration, not just one-shot answers.
+4. **User agency** — Show information and let users decide.
+5. **Summaries orient; sources decide** — Derived content guides; originals verify.
 
 ---
 
-## Primary User Purposes
+## Current Scope (Phases 1-2)
 
-1. **Orientation and sensemaking** in a domain or project
-2. **Recall and verification** of exact passages and sources
-3. **Decision support** with evidence and tradeoffs
-4. **Discovery and insight** via connections and analogies
-5. **Memory externalization** with retrievability over time
+### What Melvil Does Now
 
----
+**Phase 1 (MVP)** delivers a synthesis workspace:
+- Index PDFs for full-text search
+- Find passages across indexed materials
+- Capture passages with source references
+- Assemble passages and notes into syntheses
+- Export to Markdown with provenance
 
-## Interaction Modes
+**Phase 2** adds retrieval and enrichment:
+- Semantic search via embeddings
+- Cross-library search (beyond single workspace)
+- LLM-assisted concept extraction
+- Import from external sources (Kindle, Readwise)
+- User corrections to LLM outputs
 
-Melvil supports multiple cognitive modes and smooth transitions between them:
-- **Browsing**: timelines, facets, clusters, TOCs
-- **Inspecting**: close reading of original sources
-- **Assembling**: synthesizing excerpts into narratives
-- **Contributing**: annotation, curation, refinement
+### What Melvil Does NOT Do (Yet)
 
----
-
-## Conceptual Architecture
-
-### Layered Semantic Stack
-
-- **Layer 0: Immutable sources**
-  - PDFs, notes, metadata snapshots, versioned attachments
-- **Layer 1: Metadata and facets**
-  - authors, dates, domains, projects, permissions
-- **Layer 2: Information retrieval index**
-  - FTS for precise, auditable retrieval
-- **Layer 3: Semantic embeddings**
-  - fuzzy recall, similarity, discovery
-- **Layer 4: Structured meaning**
-  - term definitions, claims, arguments, relations
-
-Meaning emerges from **interaction between layers**, not any single layer.
+- Automated reading recommendations
+- Relevance scoring
+- Knowledge graphs or argument mapping
+- Multi-user collaboration
 
 ---
 
-## Data Model (Canonical)
+## Phased Delivery
 
-This model is additive and provenance-first. All derived artifacts include source links, timestamps, and model/version identifiers.
+### Phase 1: Synthesis Workspace (MVP)
+
+**Goal**: Help users assemble and synthesize from sources they're actively reading.
+
+**Capabilities**:
+- Create synthesis workspaces around topics
+- Add sources from Zotero or manually
+- Index PDFs for full-text search
+- Find and capture passages
+- Add structured notes (thesis, terms, arguments)
+- Export to Markdown
+
+**Data model**: Materials, source snapshots, passages, synthesis projects, synthesis items, FTS index.
+
+**See**: `SPEC_MVP.md` for complete specification.
+
+### Phase 2: Retrieval Expansion
+
+**Goal**: Find relevant passages across entire library, not just active workspace.
+
+**Capabilities**:
+- Embedding-based semantic search
+- Cross-library passage retrieval
+- LLM-assisted concept extraction from passages
+- Term definition extraction with source links
+- Import highlights from Kindle, Readwise, Apple Books
+- User correction workflow for LLM outputs
+
+**New data**:
 
 ```sql
-materials (
-  id, type, title, authors, year, identifiers_json,
-  zotero_key, content_path, source_snapshot_id,
-  created_at, updated_at
+-- Embeddings for semantic search
+passage_embeddings (
+  id INTEGER PRIMARY KEY,
+  passage_id INTEGER NOT NULL REFERENCES passages(id),
+  model_version TEXT NOT NULL,      -- e.g., "text-embedding-3-small-2024"
+  embedding BLOB NOT NULL,          -- Vector data
+  created_at TIMESTAMP
 )
 
-source_snapshots (
-  id, material_id, captured_at, source_type, source_ref, hash
-)
-
-chapters (
-  id, material_id, number, title, parent_id,
-  page_start, page_end
-)
-
-passages (
-  id, material_id, chapter_id, start_offset, end_offset,
-  text, page_start, page_end
-)
-
-summaries (
-  id, material_id, chapter_id, scope, text,
-  provenance_json, confidence, created_at
-)
-
+-- LLM-extracted concepts
 concepts (
-  id, name, normalized
+  id INTEGER PRIMARY KEY,
+  name TEXT NOT NULL,
+  normalized_name TEXT,             -- Canonical form for matching
+  created_at TIMESTAMP
 )
 
-concept_links (
-  id, material_id, chapter_id, passage_id, concept_id,
-  confidence, provenance_json, created_at, user_confirmed
+-- Concept occurrences in passages
+concept_occurrences (
+  id INTEGER PRIMARY KEY,
+  concept_id INTEGER NOT NULL REFERENCES concepts(id),
+  passage_id INTEGER NOT NULL REFERENCES passages(id),
+  material_id INTEGER NOT NULL REFERENCES materials(id),
+  confidence REAL,                  -- LLM confidence (0-1)
+  user_confirmed BOOLEAN DEFAULT FALSE,
+  created_at TIMESTAMP
 )
 
+-- Term definitions extracted from sources
 term_definitions (
-  id, term, term_as_written, material_id, passage_id,
-  definition, provenance_json, confidence, created_at
+  id INTEGER PRIMARY KEY,
+  term TEXT NOT NULL,
+  term_as_written TEXT,             -- Original form in source
+  material_id INTEGER NOT NULL REFERENCES materials(id),
+  passage_id INTEGER REFERENCES passages(id),
+  definition TEXT NOT NULL,
+  extraction_model TEXT,            -- Model that extracted this
+  user_edited BOOLEAN DEFAULT FALSE,
+  created_at TIMESTAMP
 )
 
-interpretations (
-  id, topic, material_id, stance, evidence_passages_json,
-  created_at, superseded_by
-)
-
-annotations (
-  id, material_id, passage_id, annotation_type, note,
-  provenance_json, confidence, created_at
-)
-
-synthesis_projects (
-  id, topic, guiding_questions_json, materials_json,
-  current_thesis, key_insights_json, remaining_questions_json,
-  status, created_at, updated_at
-)
-
-workspace_index (
-  id, synthesis_id, kind, text, created_at
+-- External highlight imports
+imported_highlights (
+  id INTEGER PRIMARY KEY,
+  source TEXT NOT NULL,             -- 'kindle', 'readwise', 'apple_books'
+  external_id TEXT,                 -- ID in source system
+  material_id INTEGER REFERENCES materials(id),
+  text TEXT NOT NULL,
+  location TEXT,                    -- Source-specific location info
+  imported_at TIMESTAMP,
+  converted_to_passage_id INTEGER REFERENCES passages(id)
 )
 ```
 
-Notes:
-- `provenance_json` includes source snapshot id, model/version, and extraction method.
-- `confidence` is optional but visible when present.
-- Prior versions are preserved; new generations append, not overwrite.
+**Provenance model** (Phase 2 adds LLM outputs):
+
+```sql
+-- For LLM-derived content, track extraction details
+llm_extractions (
+  id INTEGER PRIMARY KEY,
+  target_type TEXT NOT NULL,        -- 'concept', 'term_definition', 'summary'
+  target_id INTEGER NOT NULL,
+  model TEXT NOT NULL,              -- e.g., "claude-3-sonnet-20240229"
+  prompt_version TEXT,              -- Version of extraction prompt
+  raw_response TEXT,                -- Full LLM response for debugging
+  created_at TIMESTAMP
+)
+```
+
+### Phase 3: Structured Meaning (Future)
+
+**Goal**: Support deeper analysis with structured representations.
+
+**Potential capabilities** (subject to validation):
+- Argument structure extraction
+- Cross-source interpretation tracking
+- Concept relationship mapping
+- Reading path suggestions
+
+This phase is not yet specified. Design will be informed by user feedback from Phases 1-2.
 
 ---
 
-## Ingestion Pipeline
+## Architecture
 
-1. **Sync metadata** from Zotero or other sources
-2. **Capture source snapshot** (metadata + file hash)
-3. **Import TOC** from metadata where available
-4. **Extract text** from PDFs (or EPUB) if available
-5. **Segment passages** with stable offsets and page references
-6. **Generate summaries** with provenance and confidence
-7. **Extract concepts and term definitions** with provenance
-8. **Index** into FTS and vector layers
+### Technology Stack
+
+| Component | Technology | Rationale |
+|-----------|------------|-----------|
+| Database | SQLite | Single file, zero infrastructure, FTS5 built-in |
+| Vector search | sqlite-vec | Keeps everything in one database |
+| LLM | Claude API | Long context, good at extraction |
+| Embeddings | OpenAI text-embedding-3-small | Reliable, good quality/cost ratio |
+| CLI | Click + Rich | Standard Python CLI, good UX |
+| PDF extraction | pdfplumber / PyMuPDF | Pure Python, no external dependencies |
+
+### Data Flow
+
+```
+┌─────────────┐     ┌─────────────┐     ┌─────────────┐
+│   Zotero    │────▶│  Materials  │────▶│   Source    │
+│   Library   │     │   Table     │     │  Snapshots  │
+└─────────────┘     └─────────────┘     └─────────────┘
+                           │                    │
+                           ▼                    ▼
+                    ┌─────────────┐     ┌─────────────┐
+                    │  PDF Files  │────▶│  Passages   │
+                    │             │     │  (indexed)  │
+                    └─────────────┘     └─────────────┘
+                                               │
+                           ┌───────────────────┼───────────────────┐
+                           ▼                   ▼                   ▼
+                    ┌─────────────┐     ┌─────────────┐     ┌─────────────┐
+                    │  FTS Index  │     │  Synthesis  │     │  Embeddings │
+                    │  (Phase 1)  │     │  Workspace  │     │  (Phase 2)  │
+                    └─────────────┘     └─────────────┘     └─────────────┘
+```
+
+### Future Architecture (Vision)
+
+The full semantic archive vision includes a layered architecture where meaning emerges from interaction between layers:
+
+```
+Layer 4: Structured Meaning
+         Claims, arguments, interpretations, relationships
+                    ↑
+Layer 3: Semantic Embeddings
+         Vector representations for similarity and discovery
+                    ↑
+Layer 2: Information Retrieval
+         FTS for precise, auditable keyword search
+                    ↑
+Layer 1: Metadata & Facets
+         Authors, dates, domains, projects
+                    ↑
+Layer 0: Immutable Sources
+         PDFs, notes, snapshots (versioned, preserved)
+```
+
+**Current implementation**: Phases 1-2 implement Layers 0-3. Layer 4 (structured meaning) is deferred pending user validation.
 
 ---
 
-## Retrieval as a Process
+## CLI Design
 
-A retrieval session is iterative and transparent:
-1. Start from a question
-2. Surface candidates from FTS and semantic layers
-3. Show **why** results appear (signals, sources, confidence)
-4. Inspect original passages
-5. Refine the question or assemble a synthesis
+### Command Structure
+
+```
+melvil
+├── zotero
+│   └── sync              # Sync from Zotero library
+├── alias                 # Set title alias
+├── show <title>          # Show material details
+├── synthesize <topic>    # Create synthesis workspace
+└── synth
+    ├── show              # Show workspace
+    ├── list              # List workspaces
+    ├── add-source        # Add source to workspace
+    ├── index             # Index source for search
+    ├── find              # Search passages
+    ├── capture           # Capture passage
+    ├── note              # Add note
+    ├── reorder           # Reorder items
+    └── export            # Export to Markdown
+```
+
+### Design Principles
+
+1. **Nouns are titles, not IDs**: `melvil show "DDIA"` not `melvil show abc123`
+2. **Commands are verbs**: `synthesize`, `find`, `capture`, `export`
+3. **Output is scannable**: Show sources, page references, provenance
+4. **Fast feedback**: Common operations < 500ms
+
+### Output Standards
+
+All passage displays include:
+- Source title
+- Page reference (when available)
+- Chapter (when available)
+
+Search results show:
+- Match snippet with highlighting
+- Source and location
+- Result number for quick capture
 
 ---
 
-## Product Scope (Full System)
+## Zotero Integration
 
-The full system supports:
-- Source snapshots and provenance across all derived artifacts
-- TOC capture, text extraction, and passage indexing
-- FTS and semantic embeddings for recall and discovery
-- Inspectable summaries, concepts, and term definitions
-- Synthesis workspaces, interpretations, and argument tracking
-- Iterative retrieval with provenance-first inspection paths
-
-This spec intentionally avoids promise of black-box recommendations.
-
----
-
-## MVP Reference
-
-The MVP is defined in `docs/SPEC_MVP.md`. It **starts with the synthesis workspace** and a minimal ingest path, with correction workflows deferred to Phase 2.
-
----
-
-## CLI and UX Surface
-
-The CLI is a primary interface but must support multiple modes:
+### Sync Behavior
 
 ```bash
-# Ingest
 melvil zotero sync
-melvil ingest --toc
-melvil ingest --title "DDIA"
-
-# Browse / Inspect
-melvil toc "DDIA"
-melvil toc "DDIA" --explain
-melvil find "CAP theorem"        # passage retrieval
-melvil show "DDIA" --sources     # provenance view
-
-# Concepts / Terms
-melvil concepts "DDIA"
-melvil terms "consistency"
-
-# Synthesis
-melvil synthesize "consistency models"
-melvil assemble "consistency models" --add "DDIA" --passages 12,13,14
-melvil synth capture "DDIA" --page 323-325 --type passage
-melvil synth find "consistency" --in "consistency models"
 ```
 
-CLI output must:
-- show provenance and confidence where relevant
-- preserve access to original passages
-- allow iterative refinement
-- surface source snapshot hash and page range in capture/edit flows
+1. Connect to local Zotero SQLite database
+2. Import/update materials metadata
+3. Link to PDF attachments (if present)
+4. Preserve Zotero item keys for reference
+
+### Design Decisions
+
+- **Zotero remains source of truth** for bibliography
+- **One-way sync**: Zotero → Melvil (no writes back)
+- **Non-destructive**: Melvil enriches, doesn't modify
+- **Graceful degradation**: Works without Zotero (manual entry)
+
+### Known Limitations
+
+- Zotero database locked while Zotero is running (use API fallback)
+- Schema may change across Zotero versions
+- Synced vs. local-only libraries behave differently
 
 ---
 
 ## Anti-Patterns to Avoid
 
-- **Premature ontology freezing**
-- **Overconfident summarization**
-- **Single-mode interaction**
-- **Relevance as a black box**
-- **Forgetting time**
+Based on the orientation guide, Melvil explicitly avoids:
+
+1. **Overconfident summarization** — All LLM outputs are provisional and editable
+2. **Relevance as black box** — Search shows why results match
+3. **Premature ontology** — Structure emerges from use, not upfront design
+4. **Single-mode interaction** — Supports search, browse, assemble, export
+5. **Forgetting time** — Source snapshots preserve state at capture
 
 ---
 
 ## Evaluation Metrics
 
-- Coverage: % of library with TOC and passages indexed
-- Provenance completeness: % of derived artifacts with snapshot + model metadata
-- Retrieval quality: time to find a relevant passage
-- User trust signals: corrections, confirmations, and revisits
+### Phase 1 (MVP)
+
+| Metric | Target |
+|--------|--------|
+| Time to first capture | < 5 minutes from install |
+| Search latency (10k passages) | < 500ms |
+| Passage provenance completeness | 100% have source + page |
+| Export fidelity | All items preserved with references |
+
+### Phase 2
+
+| Metric | Target |
+|--------|--------|
+| Semantic search relevance | Top-5 contains relevant passage 80%+ |
+| Concept extraction accuracy | User confirms 70%+ without edits |
+| Import success rate | 95%+ Kindle/Readwise highlights import |
 
 ---
 
-## Phased Delivery (Aligned with Semantic Archive)
+## Open Questions
 
-### Phase 1: Synthesis Workspace (MVP)
-- Minimal ingest (metadata + optional text import)
-- Passage capture with stable references
-- Guided capture flow with optional PDF prefill
-- Workspace creation and assembly of excerpts
-- Provenance display for every excerpt
-- Workspace-scoped find across captured passages and notes
-
-### Phase 2: Clarify + Correct
-- Correction loop for summaries and concepts
-- Term definitions with source links
-- Concept normalization and browsing
-
-### Phase 3: Retrieval Expansion
-- FTS + embeddings across passages
-- Cross-source comparisons and interpretations
-- Export to external notes
+See `QUESTIONS.md` for unresolved design questions requiring user research before Phase 2.
 
 ---
 
-## Status of Prior Docs
+## Document Status
 
-Legacy design documents are archived in `docs/archive/` for historical context. This spec supersedes them.
+| Document | Purpose | Status |
+|----------|---------|--------|
+| `SPEC_MVP.md` | Phase 1 implementation spec | Active |
+| `SPEC_FULL.md` | Full system vision (this doc) | Active |
+| `QUESTIONS.md` | User research questions | Active |
+| `semantic_archive_design_orientation_literature_guide.md` | Conceptual foundations | Reference |
+| `AGENTS.md` | Developer/agent guidelines | Active |
+| `docs/archive/*` | Historical documents | Archived |

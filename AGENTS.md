@@ -24,16 +24,18 @@ This document provides context and guidelines for AI agents working on the Melvi
 ### Key Files
 ```
 melvil/
-├── docs/SPEC_FULL.md      # Full system spec (semantic archive)
-├── docs/SPEC_MVP.md       # MVP spec (synthesis workspace)
-├── docs/README.md         # Docs index
-├── docs/semantic_archive_design_orientation_literature_guide.md  # Orientation
+├── docs/
+│   ├── SPEC_MVP.md        # MVP spec (synthesis workspace) - START HERE
+│   ├── SPEC_FULL.md       # Full system spec (all phases)
+│   ├── QUESTIONS.md       # Open design questions for user research
+│   ├── semantic_archive_design_orientation_literature_guide.md  # Conceptual foundations
+│   └── archive/           # Historical documents (reference only)
 ├── AGENTS.md              # This file
 ├── src/                   # Source code (when created)
 │   ├── cli.py             # CLI entry point
 │   ├── db.py              # SQLite operations
 │   ├── zotero.py          # Zotero integration
-│   └── synthesize.py       # Synthesis workspace (planned)
+│   └── synthesize.py      # Synthesis workspace
 └── tests/
 ```
 
