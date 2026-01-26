@@ -24,7 +24,6 @@ The system supports the workflow of a reader who:
 4. **Link concepts** to each other and to the books that discuss them.
 5. **Write notes** tied to concepts and/or specific sources.
 6. **See the map** — Basic visualization so you can actually see what you're building.
-7. **Maintain the map** — Merge duplicates, archive stale concepts, prune noise.
 
 ---
 
@@ -72,7 +71,7 @@ The central data structure is a **concept map**:
 
 **Quick capture**: `melvil note --book "DDIA" "[[consensus]] is equivalent to total order broadcast"`
 
-Both create the same data: a concept, a note, links between them. The `[[wikilink]]` syntax is just a convenient way to create concepts and set the note's concept link in one command. There's no separate storage mechanism—wikilinks are an input method, not a data structure.
+Both create the same data: a concept, a note, links between them. The `[[wikilink]]` syntax is just a convenient alias for `--concept` that uses the same link-creation path. There's no separate storage mechanism—wikilinks are an input method, not a data structure.
 
 ### Reading Depth
 
@@ -91,6 +90,8 @@ Books have a **depth level** indicating how thoroughly they've been engaged:
 Notes capture your thinking. They can be:
 - **Quick captures** — Jotted while reading, refined later
 - **Developed thoughts** — Fully articulated ideas
+
+Standard notes can link to zero or one concept. Notes can link to multiple concepts only when the note is explicitly about their relationship (comparison, contrast, equivalence). Use `--type relation` for these.
 
 Classification (fleeting/literature/permanent) is optional. The system doesn't enforce Zettelkasten orthodoxy—use it if it helps, ignore it if it doesn't.
 
@@ -178,12 +179,10 @@ book_concepts (
 
   -- Your notes on this treatment (free text, optional)
   notes TEXT,                   -- How the book treats this concept, why it matters
-
-  UNIQUE(book_id, concept_id)
 )
 ```
 
-Note: Earlier designs included `treatment` (introduces/discusses/applies) and `importance` (central/significant/mentioned) fields. These were removed to reduce friction. If you want to note that DDIA "introduces" consensus, put it in the `notes` field. Structure that doesn't get used is worse than no structure.
+Multiple mentions of the same concept in a book are allowed (e.g., different chapters or locations). Earlier designs included `treatment` (introduces/discusses/applies) and `importance` (central/significant/mentioned) fields. These were removed to reduce friction. If you want to note that DDIA "introduces" consensus, put it in the `notes` field. Structure that doesn't get used is worse than no structure.
 
 ### Concept Links (Graph Edges)
 
@@ -214,9 +213,11 @@ notes (
   body TEXT NOT NULL,           -- The note content (Markdown)
 
   -- Connections (all optional)
-  concept_id INTEGER REFERENCES concepts(id),
   book_id INTEGER REFERENCES books(id),
   chapter_id INTEGER REFERENCES chapters(id),
+
+  -- Type
+  note_type TEXT DEFAULT 'standard',  -- 'standard', 'relation'
 
   -- For quotes/passages
   source_location TEXT,         -- "DDIA p.336", "Ch. 9", etc.
@@ -224,6 +225,21 @@ notes (
 
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+)
+```
+
+### Note-Concept Links
+
+```sql
+note_concepts (
+  id INTEGER PRIMARY KEY,
+  note_id INTEGER NOT NULL REFERENCES notes(id),
+  concept_id INTEGER NOT NULL REFERENCES concepts(id),
+
+  -- How link was created
+  source TEXT DEFAULT 'explicit', -- 'explicit' or 'wikilink'
+
+  UNIQUE(note_id, concept_id)
 )
 ```
 
@@ -258,12 +274,11 @@ aliases (
 
 ```bash
 # Capture a thought while reading
-# [[wikilinks]] create concepts if needed and set the note's concept link
+# [[wikilinks]] create concepts if needed and create concept links
 melvil note "[[CAP theorem]] framing as 'pick 2 of 3' is misleading" --book "DDIA"
 
-# If multiple [[wikilinks]] appear, the first becomes the note's concept_id
 # Or specify explicitly:
-melvil note "[[linearizability]] vs [[serializability]]" --concept "linearizability"
+melvil note "[[linearizability]] vs serializability" --concept "linearizability"
 
 # Quick capture opens $EDITOR if no text provided
 melvil note --book "DDIA"
@@ -336,8 +351,11 @@ melvil concept show "CAP theorem"
 
 # List all concepts
 melvil concepts
-melvil concepts --book "DDIA"   # Concepts from a specific book
+melvil concepts --book "DDIA"   # Concepts from a specific book (deduped)
 melvil concepts --orphan        # Concepts with no links (cleanup candidates)
+
+# Show per-mention rows for a book
+melvil concept mentions --book "DDIA"
 ```
 
 ### Note Management
@@ -348,6 +366,9 @@ melvil note "[[CAP theorem]] 'pick 2 of 3' is misleading—partitions aren't opt
 
 # Note on a book (opens editor if no text)
 melvil note --book "DDIA" "Kleppmann's [[consensus]] treatment bridges theory and practice well"
+
+# Relation note with multiple concepts
+melvil note --type relation --concept "consensus" --concept "linearizability" "How these interact in DDIA"
 
 # Note with source location
 melvil note --book "DDIA" --location "p.336" "Kleppmann calls [[CAP theorem]] 'unfortunate' terminology"
@@ -364,6 +385,9 @@ melvil notes --concept "CAP theorem"
 melvil notes --book "DDIA"
 melvil notes --draft            # Unrefined captures
 melvil notes search "consensus"
+melvil notes --type relation    # Relation notes only
+
+# `--concept` results dedupe by note (a note linked to multiple concepts appears once)
 
 # Refine a draft note
 melvil note edit 42             # Opens in $EDITOR
@@ -376,7 +400,7 @@ melvil note edit 42             # Opens in $EDITOR
 melvil map --concept "consensus"
 
 # See what concepts a book covers
-melvil map --book "DDIA"
+melvil map --book "DDIA"                 # Deduped by concept
 
 # See concepts related to a concept
 melvil map --related "linearizability"
@@ -405,23 +429,6 @@ melvil export --format obsidian    # Creates vault with [[wikilinks]]
 
 The MVP includes basic visualization because a map you can't see isn't useful. The TUI shows concepts as nodes, links as edges, with keyboard navigation. It's not fancy, but it lets you see the structure.
 
-### Maintenance
-
-```bash
-# Find cleanup candidates
-melvil concepts --orphan         # No links to books or other concepts
-melvil notes --unlinked          # Notes with no concept
-
-# Merge duplicate concepts (moves all links from first to second, deletes first)
-melvil concept merge "CAP" "CAP theorem"
-
-# Delete unused concepts
-melvil concept delete "old-concept"
-melvil concept delete "old-concept" --force  # Even if it has links
-```
-
-Maintenance uses the same primitives: query, update, delete. No special "archived" state—if you don't want something, delete it.
-
 ---
 
 ## Workflows
@@ -432,7 +439,7 @@ Maintenance uses the same primitives: query, update, delete. No special "archive
 # You're reading DDIA. Capture thoughts as you go:
 $ melvil note --book "DDIA" "[[Linearizability]] is about recency, not transactions"
 $ melvil note --book "DDIA" "[[CAP theorem]] framing is misleading—see p.336"
-$ melvil note --book "DDIA" "[[consensus]] and [[total order broadcast]] are equivalent!"
+$ melvil note --book "DDIA" "[[consensus]] is equivalent to total order broadcast!"
 
 # Later, see what emerged:
 $ melvil concepts --book "DDIA"
@@ -489,29 +496,6 @@ $ melvil concept relate "linearizability" "consensus" --type prerequisite
 $ melvil concept show "linearizability"
 $ melvil viz --focus "linearizability"
 ```
-
-### Workflow 4: Maintenance Session
-
-```bash
-# Monthly cleanup: see what needs attention
-$ melvil concepts --orphan
-  CAP (no books, no links) — maybe merge into "CAP theorem"?
-  old-idea (no notes, no books)
-
-$ melvil concept merge "CAP" "CAP theorem"
-Merged: 2 notes moved, concept archived.
-
-$ melvil concept archive "old-idea"
-Archived: old-idea
-
-$ melvil concepts --stale
-  Byzantine faults (last touched 8 months ago)
-
-# Either engage with it or archive it
-$ melvil concept archive "Byzantine faults"
-```
-
----
 
 ## Output Examples
 
@@ -672,6 +656,8 @@ Consensus and total order broadcast are equivalent problems...
 - [ ] User can link notes to each other
 - [ ] Notes are searchable by content
 - [ ] `[[wikilinks]]` in note body are parsed and linked
+- [ ] `--type relation` allows multiple concept links
+- [ ] `melvil notes --type relation` filters by note type
 
 ### Visualization
 - [ ] `melvil viz` opens interactive TUI graph view
@@ -679,16 +665,11 @@ Consensus and total order broadcast are equivalent problems...
 - [ ] Graph is navigable via keyboard
 - [ ] Export to DOT format works
 
-### Maintenance
-- [ ] `melvil concepts --orphan` lists concepts with no connections
-- [ ] `melvil concept merge A B` merges A into B, moves links
-- [ ] `melvil concept archive X` hides concept from default views
-- [ ] Archived concepts are still queryable with `--archived` flag
-
 ### Map
 - [ ] `melvil map` shows concept overview
-- [ ] `melvil map --concept X` shows books covering X
-- [ ] `melvil map --book X` shows concepts in X
+- [ ] `melvil map --concept X` shows books covering X (deduped)
+- [ ] `melvil map --book X` shows concepts in X (deduped)
+- [ ] `melvil concept mentions --book X` shows per-mention rows
 - [ ] Export produces valid Markdown
 
 ### Performance
@@ -723,8 +704,17 @@ Phase 1 (MVP) includes basic visualization. Phase 2 adds:
 - Parse `[[concept name]]` from note body on save
 - Case-insensitive matching against existing concepts
 - Create concept if no match found (name = wikilink text, no definition)
-- Store links in `note_concepts` table with `source='wikilink'`
-- Re-parse on note edit to update links
+- Use the same concept-linking behavior as `--concept` (writes to `note_concepts`)
+- Re-parse on note edit to update `source='wikilink'` links only; explicit links are preserved
+- If a link exists as both wikilink and explicit, store a single `source='explicit'` row
+- Alias resolution: match against concept names and aliases (case-insensitive); create only if no match
+- Alias collision: if multiple concepts match, error and require explicit `--concept`
+- For `note_type='standard'`, multiple concept links are rejected; use `--type relation` instead
+
+### Link Lifecycle (Source of Truth)
+- `note_concepts` is canonical for note-to-concept links
+- `source='explicit'` links are created via `--concept` and never modified by wikilink re-parse
+- `source='wikilink'` links are derived from note body and are replaced on each re-parse
 
 ### Visualization (TUI)
 - Use Textual for terminal-based graph view
@@ -742,4 +732,4 @@ Phase 1 (MVP) includes basic visualization. Phase 2 adds:
 - Preserve zotero_key for sync
 
 ### Title Resolution
-Same as before: alias → exact → prefix → fuzzy matching
+Same as before: alias → exact → prefix → fuzzy matching. Alias collisions require explicit disambiguation.

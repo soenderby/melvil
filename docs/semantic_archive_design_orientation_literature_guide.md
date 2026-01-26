@@ -22,7 +22,6 @@ The frameworks here (semantic retrieval, multi-mode interaction, provenance) inf
 - **First-class concepts** that span multiple books
 - **Low-friction capture** via `[[wikilinks]]` with emergent structure
 - **Basic visualization** so users can see the map they're building
-- **Maintenance tools** to prune noise as the map grows
 
 The guiding principle "capture first, structure progressively" directly shapes the implementation: structure can be explicit (deliberate linking) or emergent (from `[[wikilink]]` mentions in notes).
 
@@ -336,4 +335,3 @@ This document should be used to:
 - Anchor technical decisions in epistemic and human considerations
 
 It is a **living orientation**, not a final specification.
-

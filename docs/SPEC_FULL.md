@@ -31,16 +31,16 @@ Melvil addresses this by making the concept map **explicit, persistent, and navi
 1. **Concepts are first-class** — Ideas exist independent of any single source
 2. **Shallow before deep** — Map a book's territory before committing to read it
 3. **Sources as evidence** — Books support and develop concepts; they don't own them
-4. **Notes are atomic** — One idea per note, linked to concepts and sources
+4. **Notes are atomic** — One idea per note, linked to concepts and sources (relation notes are the explicit exception)
 5. **Structure can be explicit or emergent** — Build deliberately or let it emerge from `[[wikilinks]]`
-6. **The map grows and is pruned** — Understanding accumulates; noise is archived
+6. **The map grows and is refined** — Understanding accumulates and structure improves over time
 7. **A map you can't see isn't useful** — Basic visualization is essential, not a luxury
 
 ## Two Paths to Structure
 
 **Explicit structure**: Create concepts deliberately, define them, link them carefully.
 
-**Emergent structure**: Write notes with `[[concept]]` mentions, concepts are created implicitly, refine later.
+**Emergent structure**: Write notes with `[[concept]]` mentions, concepts are created implicitly, refine later. `[[wikilinks]]` are shorthand for the same explicit link creation path.
 
 Both paths lead to the same map. The system supports quick capture when reading and deliberate structuring when reflecting. Most users will mix both approaches.
 
@@ -101,9 +101,27 @@ Notes capture your thinking. The system uses a simple status model:
 |--------|---------|
 | **draft** | Quick capture, not yet refined |
 | **active** | Normal note, part of the working map |
-| **archived** | Hidden from default views, still queryable |
 
 **Zettelkasten note types** (fleeting/literature/permanent) are valid mental models but aren't enforced by the system. If you want to track them, use tags or a naming convention. The system doesn't require classification overhead for every note.
+
+Standard notes can link to zero or one concept. Notes can link to multiple concepts only when the note is explicitly about their relationship (comparison, contrast, equivalence). Use `--type relation` for these.
+List views dedupe by note (a note linked to multiple concepts appears once).
+
+**Note examples**
+
+```bash
+# Quick capture with wikilinks
+melvil note "[[CAP theorem]] 'pick 2 of 3' is misleading—partitions aren't optional"
+
+# Note on a book
+melvil note --book "DDIA" "Kleppmann's [[consensus]] treatment bridges theory and practice well"
+
+# Note with multiple concepts
+melvil note --type relation --concept "consensus" --concept "linearizability" "How these interact in DDIA"
+
+# Relation notes only
+melvil notes --type relation
+```
 
 **Structure notes** (Phase 2) organize other notes into synthesis documents. They don't contain new ideas—they arrange existing notes into coherent arguments.
 
@@ -113,7 +131,7 @@ Notes capture your thinking. The system uses a simple status model:
 
 ### Phase 1: Concept Mapping (MVP)
 
-**Goal**: Low-friction capture, basic visualization, map maintenance.
+**Goal**: Low-friction capture and basic visualization.
 
 **Capabilities**:
 - Add books from Zotero or manually
@@ -122,7 +140,6 @@ Notes capture your thinking. The system uses a simple status model:
 - Link concepts to books and to each other
 - Write notes with `[[concept]]` mentions (auto-linking)
 - **Basic TUI visualization** — see the graph you're building
-- **Maintenance tools** — merge duplicates, archive stale concepts
 - Export to Markdown, DOT, Obsidian format
 
 **See**: `SPEC_MVP.md` for complete specification.
@@ -417,16 +434,11 @@ CREATE TABLE concepts (
   -- Organization (optional hierarchy)
   parent_id INTEGER REFERENCES concepts(id),
 
-  -- Lifecycle
-  archived BOOLEAN DEFAULT FALSE,           -- Hidden from default views
-  merged_into_id INTEGER REFERENCES concepts(id),  -- If merged into another
-
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE INDEX idx_concepts_parent ON concepts(parent_id);
-CREATE INDEX idx_concepts_archived ON concepts(archived) WHERE NOT archived;
 ```
 
 ### Book-Concept Links
@@ -443,15 +455,14 @@ CREATE TABLE book_concepts (
 
   -- Your notes on how this book treats the concept (free text)
   notes TEXT,
-
-  UNIQUE(book_id, concept_id)
 );
 
 CREATE INDEX idx_book_concepts_book ON book_concepts(book_id);
 CREATE INDEX idx_book_concepts_concept ON book_concepts(concept_id);
 ```
 
-Note: Earlier designs included `treatment` (introduces/discusses/etc.) and `importance` (central/significant/mentioned) enum fields. These were removed to reduce friction—users rarely filled them consistently, and free-text notes serve the same purpose without requiring micro-decisions on every link.
+Multiple mentions of the same concept in a book are allowed (e.g., different chapters or locations). Earlier designs included `treatment` (introduces/discusses/etc.) and `importance` (central/significant/mentioned) enum fields. These were removed to reduce friction—users rarely filled them consistently, and free-text notes serve the same purpose without requiring micro-decisions on every link.
+Use `melvil concept mentions --book "DDIA"` to list per-mention rows for a book.
 
 ### Concept Links
 
@@ -489,23 +500,24 @@ CREATE TABLE notes (
   title TEXT,
   body TEXT NOT NULL,
 
-  -- Primary connections (optional — concepts can also link via [[wikilinks]] in body)
-  concept_id INTEGER REFERENCES concepts(id) ON DELETE SET NULL,  -- Primary concept
+  -- Connections (all optional)
   book_id INTEGER REFERENCES books(id) ON DELETE SET NULL,
   chapter_id INTEGER REFERENCES chapters(id) ON DELETE SET NULL,
+
+  -- Type
+  note_type TEXT DEFAULT 'standard',  -- 'standard', 'relation'
 
   -- Source location (for quotes)
   source_location TEXT,         -- "p.336", "Ch. 9, §3"
   is_quote BOOLEAN DEFAULT FALSE,
 
   -- Status
-  status TEXT DEFAULT 'active',  -- 'draft', 'active', 'archived'
+  status TEXT DEFAULT 'active',  -- 'draft', 'active'
 
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE INDEX idx_notes_concept ON notes(concept_id);
 CREATE INDEX idx_notes_book ON notes(book_id);
 CREATE INDEX idx_notes_status ON notes(status);
 ```
@@ -520,7 +532,7 @@ CREATE TABLE note_concepts (
   concept_id INTEGER NOT NULL REFERENCES concepts(id) ON DELETE CASCADE,
 
   -- How link was created
-  source TEXT DEFAULT 'wikilink',  -- 'wikilink' (parsed from body), 'explicit'
+  source TEXT DEFAULT 'explicit',  -- 'explicit' or 'wikilink'
 
   UNIQUE(note_id, concept_id)
 );
@@ -531,8 +543,17 @@ CREATE INDEX idx_note_concepts_concept ON note_concepts(concept_id);
 
 When a note body contains `[[consensus]]`, the system:
 1. Finds or creates a concept named "consensus"
-2. Creates a row in `note_concepts` with `source='wikilink'`
-3. Re-parses on note edit to keep links current
+2. Creates a row in `note_concepts` with `source='wikilink'` (same path as `--concept`)
+3. Re-parses on note edit to keep `source='wikilink'` links current; explicit links are preserved
+4. If a link exists as both wikilink and explicit, store a single `source='explicit'` row
+5. Alias resolution: match against concept names and aliases (case-insensitive); create only if no match
+6. Alias collision: if multiple concepts match, error and require explicit `--concept`
+7. For `note_type='standard'`, multiple concept links are rejected; use `--type relation` instead
+
+### Link Lifecycle (Source of Truth)
+- `note_concepts` is canonical for note-to-concept links
+- `source='explicit'` links are created via `--concept` and never modified by wikilink re-parse
+- `source='wikilink'` links are derived from note body and are replaced on each re-parse
 
 ### Note Links
 
@@ -570,7 +591,7 @@ CREATE TABLE aliases (
 melvil
 ├── note <text>                 # Quick capture with [[wikilinks]] (most common)
 ├── quote                       # Create a quote note
-├── notes                       # List/search notes
+├── notes                       # List/search notes (--type relation)
 │
 ├── add <title>                 # Add a book
 ├── show <title>                # Show book details
@@ -587,17 +608,13 @@ melvil
 ├── concept <name>              # Create/show concept
 │   ├── alias                   # Add concept alias
 │   ├── link                    # Link concept to book
+│   ├── mentions                # Show per-mention rows
 │   ├── relate                  # Link concept to concept
-│   ├── merge                   # Merge two concepts
-│   ├── archive                 # Archive a concept
-│   ├── restore                 # Restore archived concept
 │   └── show                    # Show concept details
-├── concepts                    # List concepts (--orphan, --stale, --archived)
+├── concepts                    # List concepts (--orphan)
 │
 ├── map                         # Show concept map (text)
 ├── viz                         # Interactive graph visualization (TUI)
-│
-├── cleanup                     # Maintenance: find/archive orphans
 │
 ├── landmark <concept>          # Mark as navigation anchor (Phase 2)
 ├── landmarks                   # List landmarks (Phase 2)
@@ -624,9 +641,8 @@ melvil
 
 1. **Quick capture first**: `melvil note` is the most common command
 2. **Titles over IDs**: `melvil show "DDIA"` not `melvil show 42`
-3. **Implicit concept creation**: `[[wikilinks]]` create concepts automatically
+3. **Wikilinks are shorthand**: `[[wikilinks]]` use the same explicit link creation path
 4. **Progressive detail**: `melvil books` → `melvil show X` → `melvil concept show Y`
-5. **Maintenance is normal**: Merge, archive, and cleanup are first-class operations
 
 ---
 
