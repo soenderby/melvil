@@ -494,6 +494,21 @@ def test_note_edit_standard_note_concept_limit(
     assert "Standard notes can link to at most one concept" in result.output
 
 
+def test_note_concept_prefix_resolves_existing(db_path: Path):
+    result = _invoke(db_path, ["concept", "consensus"])
+    assert result.exit_code == 0
+
+    result = _invoke(db_path, ["note", "--concept", "cons", "Prefix note."])
+    assert result.exit_code == 0
+
+    conn = connect(db_path)
+    names = [
+        row["name"] for row in conn.execute("SELECT name FROM concepts ORDER BY name").fetchall()
+    ]
+    conn.close()
+    assert names == ["consensus"]
+
+
 def test_notes_search(db_path: Path):
     result = _invoke(db_path, ["note", "Consensus note body."])
     assert result.exit_code == 0

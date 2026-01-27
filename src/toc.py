@@ -63,14 +63,6 @@ def update_summary(conn: sqlite3.Connection, chapter_id: int, summary: str) -> N
 def resolve_chapter_id(
     conn: sqlite3.Connection, book_id: int, chapter_ref: str
 ) -> int:
-    if chapter_ref.isdigit():
-        row = conn.execute(
-            "SELECT id FROM chapters WHERE book_id = ? AND id = ?;",
-            (book_id, int(chapter_ref)),
-        ).fetchone()
-        if row:
-            return int(row["id"])
-
     rows = conn.execute(
         "SELECT id FROM chapters WHERE book_id = ? AND number = ?;",
         (book_id, chapter_ref),
@@ -82,6 +74,14 @@ def resolve_chapter_id(
             f'Ambiguous chapter "{chapter_ref}" for book {book_id}. '
             "Multiple matches on chapter number."
         )
+
+    if chapter_ref.isdigit():
+        row = conn.execute(
+            "SELECT id FROM chapters WHERE book_id = ? AND id = ?;",
+            (book_id, int(chapter_ref)),
+        ).fetchone()
+        if row:
+            return int(row["id"])
 
     raise TocError(f'No chapter "{chapter_ref}" found for book {book_id}.')
 

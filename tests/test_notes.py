@@ -32,7 +32,7 @@ def test_resolve_or_create_concept_id(db_conn):
     assert created != concept_id
 
 
-def test_resolve_or_create_concept_id_requires_exact_or_alias(db_conn):
+def test_resolve_or_create_concept_id_resolves_prefix_or_alias(db_conn):
     concept_id = _add_concept(db_conn, "consensus")
     db_conn.execute(
         "UPDATE concepts SET aliases = ? WHERE id = ?",
@@ -42,13 +42,8 @@ def test_resolve_or_create_concept_id_requires_exact_or_alias(db_conn):
     alias_resolved = resolve_or_create_concept_id(db_conn, "raft")
     assert alias_resolved == concept_id
 
-    created = resolve_or_create_concept_id(db_conn, "cons")
-    assert created != concept_id
-    row = db_conn.execute(
-        "SELECT name FROM concepts WHERE id = ?",
-        (created,),
-    ).fetchone()
-    assert row["name"] == "cons"
+    prefix_resolved = resolve_or_create_concept_id(db_conn, "cons")
+    assert prefix_resolved == concept_id
 
 
 def test_resolve_or_create_concept_id_creates_on_empty_db(db_conn):
