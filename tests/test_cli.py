@@ -288,7 +288,60 @@ def test_concept_link_missing_chapter(db_path: Path):
         ],
     )
     assert result.exit_code != 0
-    assert "Chapter \"99\" not found" in result.output
+    assert "No chapter \"99\" found for book" in result.output
+
+
+def test_concept_link_ambiguous_chapter_number(db_path: Path):
+    result = _invoke(db_path, ["add", "Designing Data-Intensive Applications"])
+    assert result.exit_code == 0
+    result = _invoke(db_path, ["concept", "consensus"])
+    assert result.exit_code == 0
+
+    result = _invoke(
+        db_path,
+        [
+            "toc",
+            "add",
+            "Designing Data-Intensive Applications",
+            "--number",
+            "I",
+            "--title",
+            "Intro",
+            "--pages",
+            "1-10",
+        ],
+    )
+    assert result.exit_code == 0
+    result = _invoke(
+        db_path,
+        [
+            "toc",
+            "add",
+            "Designing Data-Intensive Applications",
+            "--number",
+            "I",
+            "--title",
+            "Prelude",
+            "--pages",
+            "11-20",
+        ],
+    )
+    assert result.exit_code == 0
+
+    result = _invoke(
+        db_path,
+        [
+            "concept",
+            "link",
+            "consensus",
+            "--book",
+            "Designing Data-Intensive Applications",
+            "--chapter",
+            "I",
+        ],
+    )
+    assert result.exit_code != 0
+    assert "Ambiguous chapter \"I\"" in result.output
 
 
 def test_note_and_quote_commands(db_path: Path):

@@ -666,18 +666,10 @@ def concept_link(
 
     chapter_id = None
     if chapter_number:
-        row = conn.execute(
-            """
-            SELECT id FROM chapters
-            WHERE book_id = ? AND number = ?
-            """,
-            (book_id, chapter_number),
-        ).fetchone()
-        if not row:
-            raise click.ClickException(
-                f'Chapter "{chapter_number}" not found for "{book_resolved}".'
-            )
-        chapter_id = row["id"]
+        try:
+            chapter_id = toc.resolve_chapter_id(conn, book_id, chapter_number)
+        except toc.TocError as exc:
+            raise click.ClickException(str(exc)) from exc
 
     conn.execute(
         """
