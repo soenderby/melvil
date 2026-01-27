@@ -1009,17 +1009,23 @@ def notes_cmd(
 @click.pass_context
 def notes_search(ctx: click.Context, query: str) -> None:
     conn = ctx.obj["conn"]
-    rows = conn.execute(
-        """
-        SELECT n.id, n.title, n.body, n.note_type, b.title AS book_title
-        FROM notes_fts f
-        JOIN notes n ON n.id = f.rowid
-        LEFT JOIN books b ON b.id = n.book_id
-        WHERE notes_fts MATCH ?
-        ORDER BY bm25(notes_fts)
-        """,
-        (query,),
-    ).fetchall()
+    try:
+        rows = conn.execute(
+            """
+            SELECT n.id, n.title, n.body, n.note_type, b.title AS book_title
+            FROM notes_fts f
+            JOIN notes n ON n.id = f.rowid
+            LEFT JOIN books b ON b.id = n.book_id
+            WHERE notes_fts MATCH ?
+            ORDER BY bm25(notes_fts)
+            """,
+            (query,),
+        ).fetchall()
+    except sqlite3.OperationalError as exc:
+        raise click.ClickException(
+            "Invalid FTS query. Use terms, quotes for phrases, and operators like "
+            'AND/OR/NOT. Example: "consensus" OR linear*.'
+        ) from exc
 
     table = Table(title=f'Search results for "{query}"')
     table.add_column("ID", justify="right")
