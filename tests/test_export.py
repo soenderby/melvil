@@ -104,6 +104,7 @@ def test_export_map_markdown_sections_and_order(monkeypatch, db_conn):
     assert output.index("### Alpha Book") < output.index("### Beta Book")
     assert output.index("### Alpha \"Quoted\"") < output.index("### Zeta")
     assert output.index("### #1:") < output.index("### #2:")
+    assert "Ch. 1, p.10" in output
 
 
 def test_export_map_dot_escaping(db_conn):

@@ -129,10 +129,13 @@ def export_map_markdown(conn: sqlite3.Connection) -> str:
             refs = []
             for row in book_rows:
                 detail = row["title"]
+                suffix_parts = []
                 if row["number"]:
-                    detail += f" (Ch. {row['number']})"
-                elif row["location"]:
-                    detail += f" ({row['location']})"
+                    suffix_parts.append(f"Ch. {row['number']}")
+                if row["location"]:
+                    suffix_parts.append(row["location"])
+                if suffix_parts:
+                    detail += f" ({', '.join(suffix_parts)})"
                 refs.append(detail)
             lines.append(f"- **Books**: {', '.join(refs)}")
         note_rows = conn.execute(
