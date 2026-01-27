@@ -575,6 +575,28 @@ def concept_show(ctx: click.Context, name: str) -> None:
             )
         console.print(book_table)
 
+    notes = conn.execute(
+        """
+        SELECT n.id, n.title, n.body
+        FROM notes n
+        JOIN note_concepts nc ON nc.note_id = n.id
+        WHERE nc.concept_id = ?
+        ORDER BY n.id
+        """,
+        (concept_id,),
+    ).fetchall()
+    if notes:
+        note_table = Table(title="Notes")
+        note_table.add_column("ID", justify="right")
+        note_table.add_column("Title")
+        for row in notes:
+            title = row["title"]
+            if not title:
+                body = (row["body"] or "").strip()
+                title = body[:57] + "..." if len(body) > 60 else body
+            note_table.add_row(str(row["id"]), title)
+        console.print(note_table)
+
 
 @concept.command("alias")
 @click.argument("name")

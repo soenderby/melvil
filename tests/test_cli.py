@@ -173,6 +173,13 @@ def test_concept_commands_and_map(db_path: Path):
 
     result = _invoke(
         db_path,
+        ["note", "--concept", "consensus", "--title", "Key note", "Consensus note body."],
+    )
+    assert result.exit_code == 0
+    assert "Added note" in result.output
+
+    result = _invoke(
+        db_path,
         ["concept", "relate", "consensus", "linearizability", "--type", "related"],
     )
     assert result.exit_code == 0
@@ -185,6 +192,7 @@ def test_concept_commands_and_map(db_path: Path):
     result = _invoke(db_path, ["concept", "show", "consensus"])
     assert result.exit_code == 0
     assert "consensus" in result.output
+    assert "Key note" in result.output
 
     result = _invoke(db_path, ["concept", "mentions", "--book", "Designing Data-Intensive Applications"])
     assert result.exit_code == 0
