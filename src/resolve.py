@@ -9,6 +9,10 @@ class ResolutionError(ValueError):
     pass
 
 
+class ResolutionNotFoundError(ResolutionError):
+    pass
+
+
 def resolve_book_id(conn: sqlite3.Connection, title: str) -> tuple[int, str]:
     row = conn.execute(
         """
@@ -89,7 +93,7 @@ def resolve_concept_id(conn: sqlite3.Connection, name: str) -> tuple[int, str]:
 
     all_rows = conn.execute("SELECT id, name FROM concepts ORDER BY name").fetchall()
     if not all_rows:
-        raise ResolutionError("No concepts found.")
+        raise ResolutionNotFoundError("No concepts found.")
     names = [row["name"] for row in all_rows]
     matches = difflib.get_close_matches(name, names, n=3, cutoff=0.6)
     if len(matches) == 1:
@@ -100,7 +104,7 @@ def resolve_concept_id(conn: sqlite3.Connection, name: str) -> tuple[int, str]:
     if matches:
         raise ResolutionError(f'Fuzzy match found multiple concepts: {", ".join(matches)}')
 
-    raise ResolutionError(f'No concept found for "{name}".')
+    raise ResolutionNotFoundError(f'No concept found for "{name}".')
 
 
 def _candidate_message(kind: str, query: str, rows: list[sqlite3.Row]) -> str:

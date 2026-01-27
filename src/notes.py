@@ -3,7 +3,7 @@ from __future__ import annotations
 import re
 import sqlite3
 
-from .resolve import ResolutionError, resolve_concept_id
+from .resolve import ResolutionNotFoundError, resolve_concept_id
 
 WIKILINK_RE = re.compile(r"\[\[([^\[\]]+)\]\]")
 
@@ -27,17 +27,12 @@ def resolve_or_create_concept_id(conn: sqlite3.Connection, name: str) -> int:
     try:
         concept_id, _ = resolve_concept_id(conn, name)
         return concept_id
-    except ResolutionError as exc:
-        message = str(exc)
-        if message.startswith("No concept found") or message.startswith(
-            "No concepts found"
-        ):
-            cursor = conn.execute(
-                "INSERT INTO concepts (name) VALUES (?)",
-                (name,),
-            )
-            return int(cursor.lastrowid)
-        raise
+    except ResolutionNotFoundError:
+        cursor = conn.execute(
+            "INSERT INTO concepts (name) VALUES (?)",
+            (name,),
+        )
+        return int(cursor.lastrowid)
 
 
 def insert_note_concepts(
