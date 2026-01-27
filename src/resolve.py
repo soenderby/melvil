@@ -107,6 +107,33 @@ def resolve_concept_id(conn: sqlite3.Connection, name: str) -> tuple[int, str]:
     raise ResolutionNotFoundError(f'No concept found for "{name}".')
 
 
+def resolve_concept_id_exact(conn: sqlite3.Connection, name: str) -> tuple[int, str]:
+    row = conn.execute(
+        "SELECT id, name FROM concepts WHERE name = ? COLLATE NOCASE",
+        (name,),
+    ).fetchone()
+    if row:
+        return row["id"], row["name"]
+
+    matches = []
+    for row in conn.execute("SELECT id, name, aliases FROM concepts").fetchall():
+        raw = row["aliases"]
+        if not raw:
+            continue
+        try:
+            aliases = json.loads(raw)
+        except json.JSONDecodeError:
+            aliases = []
+        if any(str(alias).lower() == name.lower() for alias in aliases):
+            matches.append(row)
+    if len(matches) == 1:
+        return matches[0]["id"], matches[0]["name"]
+    if len(matches) > 1:
+        raise ResolutionError(f'Concept alias "{name}" matches multiple concepts.')
+
+    raise ResolutionNotFoundError(f'No concept found for "{name}".')
+
+
 def _candidate_message(kind: str, query: str, rows: list[sqlite3.Row]) -> str:
     options = ", ".join(row[1] for row in rows[:8])
     suffix = "..." if len(rows) > 8 else ""

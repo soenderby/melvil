@@ -3,7 +3,7 @@ from __future__ import annotations
 import re
 import sqlite3
 
-from .resolve import ResolutionNotFoundError, resolve_concept_id
+from .resolve import ResolutionNotFoundError, resolve_concept_id_exact
 
 WIKILINK_RE = re.compile(r"\[\[([^\[\]]+)\]\]")
 
@@ -25,7 +25,7 @@ def parse_wikilinks(text: str) -> list[str]:
 
 def resolve_or_create_concept_id(conn: sqlite3.Connection, name: str) -> int:
     try:
-        concept_id, _ = resolve_concept_id(conn, name)
+        concept_id, _ = resolve_concept_id_exact(conn, name)
         return concept_id
     except ResolutionNotFoundError:
         cursor = conn.execute(

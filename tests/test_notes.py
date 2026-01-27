@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from src.notes import (
     parse_wikilinks,
     resolve_or_create_concept_id,
@@ -29,6 +30,25 @@ def test_resolve_or_create_concept_id(db_conn):
 
     created = resolve_or_create_concept_id(db_conn, "linearizability")
     assert created != concept_id
+
+
+def test_resolve_or_create_concept_id_requires_exact_or_alias(db_conn):
+    concept_id = _add_concept(db_conn, "consensus")
+    db_conn.execute(
+        "UPDATE concepts SET aliases = ? WHERE id = ?",
+        (json.dumps(["Raft"]), concept_id),
+    )
+
+    alias_resolved = resolve_or_create_concept_id(db_conn, "raft")
+    assert alias_resolved == concept_id
+
+    created = resolve_or_create_concept_id(db_conn, "cons")
+    assert created != concept_id
+    row = db_conn.execute(
+        "SELECT name FROM concepts WHERE id = ?",
+        (created,),
+    ).fetchone()
+    assert row["name"] == "cons"
 
 
 def test_resolve_or_create_concept_id_creates_on_empty_db(db_conn):
