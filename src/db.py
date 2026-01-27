@@ -166,6 +166,12 @@ MIGRATIONS: list[tuple[int, str]] = [
         CREATE INDEX IF NOT EXISTS aliases_book_id_idx ON aliases(book_id);
         """,
     ),
+    (
+        2,
+        """
+        ALTER TABLE chapters ADD COLUMN updated_at TEXT DEFAULT CURRENT_TIMESTAMP;
+        """,
+    ),
 ]
 
 

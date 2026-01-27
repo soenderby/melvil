@@ -55,7 +55,7 @@ def add_chapter(
 
 def update_summary(conn: sqlite3.Connection, chapter_id: int, summary: str) -> None:
     conn.execute(
-        "UPDATE chapters SET summary = ? WHERE id = ?;",
+        "UPDATE chapters SET summary = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?;",
         (summary, chapter_id),
     )
 

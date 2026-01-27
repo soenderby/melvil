@@ -78,6 +78,37 @@ def test_add_show_list_depth_about_alias(db_path: Path):
     assert "Designing Data-Intensive Applications" in result.output
 
 
+def test_book_updates_set_updated_at(db_path: Path):
+    result = _invoke(db_path, ["add", "Designing Data-Intensive Applications"])
+    assert result.exit_code == 0
+
+    conn = connect(db_path)
+    book_id = conn.execute(
+        "SELECT id FROM books WHERE title = ?",
+        ("Designing Data-Intensive Applications",),
+    ).fetchone()["id"]
+    conn.execute(
+        "UPDATE books SET updated_at = ? WHERE id = ?",
+        ("2000-01-01 00:00:00", book_id),
+    )
+    conn.commit()
+    conn.close()
+
+    result = _invoke(
+        db_path,
+        ["depth", "Designing Data-Intensive Applications", "mapped"],
+    )
+    assert result.exit_code == 0
+
+    conn = connect(db_path)
+    updated_at = conn.execute(
+        "SELECT updated_at FROM books WHERE id = ?",
+        (book_id,),
+    ).fetchone()["updated_at"]
+    conn.close()
+    assert updated_at != "2000-01-01 00:00:00"
+
+
 def test_books_invalid_depth(db_path: Path):
     result = _invoke(db_path, ["books", "--depth", "unknown"])
     assert result.exit_code != 0
@@ -336,6 +367,11 @@ def test_note_edit_wikilink_sync(db_path: Path, monkeypatch: pytest.MonkeyPatch)
     note_id = conn.execute("SELECT id FROM notes ORDER BY id DESC LIMIT 1").fetchone()[
         "id"
     ]
+    conn.execute(
+        "UPDATE notes SET updated_at = ? WHERE id = ?",
+        ("2000-01-01 00:00:00", note_id),
+    )
+    conn.commit()
     conn.close()
 
     monkeypatch.setattr(click, "edit", lambda _: "Updated with [[raft]].")
@@ -355,6 +391,12 @@ def test_note_edit_wikilink_sync(db_path: Path, monkeypatch: pytest.MonkeyPatch)
     ).fetchall()
     names = [row["name"] for row in rows]
     assert names == ["raft"]
+
+    updated_at = conn.execute(
+        "SELECT updated_at FROM notes WHERE id = ?",
+        (note_id,),
+    ).fetchone()["updated_at"]
+    assert updated_at != "2000-01-01 00:00:00"
     conn.close()
 
 

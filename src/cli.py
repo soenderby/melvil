@@ -277,7 +277,10 @@ def depth(ctx: click.Context, title: str, depth: str) -> None:
     except ResolutionError as exc:
         raise click.ClickException(str(exc)) from exc
 
-    conn.execute("UPDATE books SET depth = ? WHERE id = ?", (depth, book_id))
+    conn.execute(
+        "UPDATE books SET depth = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+        (depth, book_id),
+    )
     conn.commit()
     console.print(f"Updated depth: {resolved} -> {depth}")
 
@@ -293,7 +296,10 @@ def about(ctx: click.Context, title: str, about: str) -> None:
     except ResolutionError as exc:
         raise click.ClickException(str(exc)) from exc
 
-    conn.execute("UPDATE books SET about = ? WHERE id = ?", (about, book_id))
+    conn.execute(
+        "UPDATE books SET about = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+        (about, book_id),
+    )
     conn.commit()
     console.print(f"Updated about: {resolved}")
 
@@ -420,7 +426,7 @@ def concept(ctx: click.Context, definition: str | None) -> None:
     if row:
         if definition:
             conn.execute(
-                "UPDATE concepts SET definition = ? WHERE id = ?",
+                "UPDATE concepts SET definition = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
                 (definition, row["id"]),
             )
             conn.commit()
@@ -629,7 +635,7 @@ def concept_alias(ctx: click.Context, name: str, aliases: tuple[str, ...]) -> No
             existing_lower.add(alias.lower())
 
     conn.execute(
-        "UPDATE concepts SET aliases = ? WHERE id = ?",
+        "UPDATE concepts SET aliases = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
         (json.dumps(existing), concept_id),
     )
     conn.commit()
@@ -938,7 +944,7 @@ def note_edit(ctx: click.Context, note_id: int) -> None:
         )
 
     conn.execute(
-        "UPDATE notes SET body = ? WHERE id = ?",
+        "UPDATE notes SET body = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
         (updated, note_id),
     )
 
