@@ -31,6 +31,15 @@ def test_resolve_or_create_concept_id(db_conn):
     assert created != concept_id
 
 
+def test_resolve_or_create_concept_id_creates_on_empty_db(db_conn):
+    created = resolve_or_create_concept_id(db_conn, "consensus")
+    row = db_conn.execute(
+        "SELECT name FROM concepts WHERE id = ?",
+        (created,),
+    ).fetchone()
+    assert row["name"] == "consensus"
+
+
 def test_sync_wikilink_concepts_creates_and_removes(db_conn):
     note_id = _add_note(db_conn, "body")
     explicit_id = _add_concept(db_conn, "explicit")

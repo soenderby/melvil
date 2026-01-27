@@ -28,7 +28,10 @@ def resolve_or_create_concept_id(conn: sqlite3.Connection, name: str) -> int:
         concept_id, _ = resolve_concept_id(conn, name)
         return concept_id
     except ResolutionError as exc:
-        if str(exc).startswith("No concept found"):
+        message = str(exc)
+        if message.startswith("No concept found") or message.startswith(
+            "No concepts found"
+        ):
             cursor = conn.execute(
                 "INSERT INTO concepts (name) VALUES (?)",
                 (name,),
