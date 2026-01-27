@@ -1267,11 +1267,18 @@ def export_cmd() -> None:
 @click.option(
     "--format",
     "fmt",
-    type=click.Choice(["markdown", "json", "dot"], case_sensitive=False),
+    type=click.Choice(["markdown", "json", "dot", "obsidian"], case_sensitive=False),
     default="markdown",
 )
+@click.option(
+    "--output",
+    "output_dir",
+    type=click.Path(path_type=Path),
+    default=None,
+    help="Output directory for obsidian export.",
+)
 @click.pass_context
-def export_map(ctx: click.Context, fmt: str) -> None:
+def export_map(ctx: click.Context, fmt: str, output_dir: Path | None) -> None:
     conn = ctx.obj["conn"]
     fmt_lower = fmt.lower()
     if fmt_lower == "markdown":
@@ -1283,6 +1290,14 @@ def export_map(ctx: click.Context, fmt: str) -> None:
         return
     if fmt_lower == "dot":
         click.echo(export.export_map_dot(conn))
+        return
+    if fmt_lower == "obsidian":
+        target = output_dir or export.obsidian_default_dir()
+        try:
+            output_path = export.export_map_obsidian(conn, target)
+        except ValueError as exc:
+            raise click.ClickException(str(exc)) from exc
+        console.print(f"Obsidian vault written to {output_path}.")
         return
     raise click.ClickException(f"Unsupported format: {fmt}")
 

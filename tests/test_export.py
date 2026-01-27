@@ -113,3 +113,28 @@ def test_export_map_dot_escaping(db_conn):
 
     assert 'label="Alpha \\"Quoted\\""' in output
     assert output.startswith("digraph MelvilMap")
+
+
+def test_export_map_obsidian_writes_vault(tmp_path, db_conn):
+    _seed_export_data(db_conn)
+
+    output_dir = tmp_path / "vault"
+    result = export.export_map_obsidian(db_conn, output_dir)
+
+    assert result == output_dir
+    assert (output_dir / "Books").is_dir()
+    assert (output_dir / "Concepts").is_dir()
+    assert (output_dir / "Notes").is_dir()
+
+    concept_files = list((output_dir / "Concepts").glob("*.md"))
+    assert any('Alpha "Quoted"' in path.read_text() for path in concept_files)
+    alpha_concept = next(
+        path for path in concept_files if 'Alpha "Quoted"' in path.read_text()
+    )
+    assert "[[Zeta]]" in alpha_concept.read_text()
+
+    book_files = list((output_dir / "Books").glob("*.md"))
+    assert any("Alpha Book" in path.read_text() for path in book_files)
+
+    note_files = list((output_dir / "Notes").glob("*.md"))
+    assert any("First note body" in path.read_text() for path in note_files)
