@@ -9,6 +9,14 @@ dependencies = [
     "rich>=13.7.1",
 ]
 
+[project.optional-dependencies]
+viz = [
+    "textual>=0.41.0",
+]
+pdf = [
+    "PyMuPDF>=1.23.0",
+]
+
 [project.scripts]
 melvil = "src.cli:cli"
 

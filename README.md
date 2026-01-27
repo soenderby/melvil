@@ -21,3 +21,17 @@ make test
 ```
 
 If you see `No module named pytest`, make sure you ran `uv sync --dev` first.
+
+### Optional features
+
+Install extras for visualization and PDF TOC import:
+
+```bash
+uv sync --extra viz --extra pdf
+```
+
+Or with pip:
+
+```bash
+pip install ".[viz,pdf]"
+```
