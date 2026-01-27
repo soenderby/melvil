@@ -83,6 +83,24 @@ def test_books_invalid_depth(db_path: Path):
     assert "Depth must be one of" in result.output
 
 
+def test_alias_duplicate_friendly_error(db_path: Path):
+    result = _invoke(db_path, ["add", "Designing Data-Intensive Applications"])
+    assert result.exit_code == 0
+
+    result = _invoke(
+        db_path,
+        ["alias", "DDIA", "Designing Data-Intensive Applications"],
+    )
+    assert result.exit_code == 0
+
+    result = _invoke(
+        db_path,
+        ["alias", "DDIA", "Designing Data-Intensive Applications"],
+    )
+    assert result.exit_code != 0
+    assert 'Alias "DDIA" is already in use.' in result.output
+
+
 def test_show_ambiguous_book(db_path: Path):
     for title in ("Designing Data-Intensive Applications", "Design Patterns"):
         result = _invoke(db_path, ["add", title])

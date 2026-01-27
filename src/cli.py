@@ -309,11 +309,14 @@ def alias(ctx: click.Context, alias: str, title: str) -> None:
     except ResolutionError as exc:
         raise click.ClickException(str(exc)) from exc
 
-    conn.execute(
-        "INSERT INTO aliases (alias, book_id) VALUES (?, ?)",
-        (alias, book_id),
-    )
-    conn.commit()
+    try:
+        conn.execute(
+            "INSERT INTO aliases (alias, book_id) VALUES (?, ?)",
+            (alias, book_id),
+        )
+        conn.commit()
+    except sqlite3.IntegrityError as exc:
+        raise click.ClickException(f'Alias "{alias}" is already in use.') from exc
     console.print(f"Alias added: {alias} -> {resolved}")
 
 
