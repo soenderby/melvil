@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import click
 import pytest
 from click.testing import CliRunner
 
@@ -312,6 +313,56 @@ def test_note_and_quote_commands(db_path: Path):
     result = _invoke(db_path, ["notes"])
     assert result.exit_code == 0
     assert "Notes" in result.output
+
+
+def test_note_edit_wikilink_sync(db_path: Path, monkeypatch: pytest.MonkeyPatch):
+    result = _invoke(db_path, ["note", "See [[consensus]]."])
+    assert result.exit_code == 0
+
+    conn = connect(db_path)
+    note_id = conn.execute("SELECT id FROM notes ORDER BY id DESC LIMIT 1").fetchone()[
+        "id"
+    ]
+    conn.close()
+
+    monkeypatch.setattr(click, "edit", lambda _: "Updated with [[raft]].")
+    result = _invoke(db_path, ["note", "edit", str(note_id)])
+    assert result.exit_code == 0
+    assert "Updated note" in result.output
+
+    conn = connect(db_path)
+    rows = conn.execute(
+        """
+        SELECT c.name
+        FROM note_concepts nc
+        JOIN concepts c ON c.id = nc.concept_id
+        WHERE nc.note_id = ? AND nc.source = 'wikilink'
+        """,
+        (note_id,),
+    ).fetchall()
+    names = [row["name"] for row in rows]
+    assert names == ["raft"]
+    conn.close()
+
+
+def test_note_edit_standard_note_concept_limit(
+    db_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    result = _invoke(db_path, ["concept", "consensus"])
+    assert result.exit_code == 0
+    result = _invoke(db_path, ["note", "--concept", "consensus", "Original."])
+    assert result.exit_code == 0
+
+    conn = connect(db_path)
+    note_id = conn.execute("SELECT id FROM notes ORDER BY id DESC LIMIT 1").fetchone()[
+        "id"
+    ]
+    conn.close()
+
+    monkeypatch.setattr(click, "edit", lambda _: "Updated with [[raft]].")
+    result = _invoke(db_path, ["note", "edit", str(note_id)])
+    assert result.exit_code != 0
+    assert "Standard notes can link to at most one concept" in result.output
 
 
 def test_toc_and_export_commands(db_path: Path):
