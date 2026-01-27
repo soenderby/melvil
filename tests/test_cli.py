@@ -412,6 +412,51 @@ def test_note_and_quote_commands(db_path: Path):
     assert "Notes" in result.output
 
 
+def test_quick_capture_links_book_concepts(db_path: Path):
+    result = _invoke(db_path, ["add", "Designing Data-Intensive Applications"])
+    assert result.exit_code == 0
+
+    result = _invoke(
+        db_path,
+        ["note", "--book", "Designing Data-Intensive Applications", "See [[consensus]]."],
+    )
+    assert result.exit_code == 0
+
+    result = _invoke(
+        db_path, ["map", "--book", "Designing Data-Intensive Applications"]
+    )
+    assert result.exit_code == 0
+    assert "consensus" in result.output
+
+    result = _invoke(db_path, ["concept", "show", "consensus"])
+    assert result.exit_code == 0
+    assert "Designing Data-Intensive Applications" in result.output
+
+
+def test_quote_links_book_concepts(db_path: Path):
+    result = _invoke(db_path, ["add", "Designing Data-Intensive Applications"])
+    assert result.exit_code == 0
+
+    result = _invoke(
+        db_path,
+        [
+            "quote",
+            "--book",
+            "Designing Data-Intensive Applications",
+            "--location",
+            "p.10",
+            "Quote with [[consensus]].",
+        ],
+    )
+    assert result.exit_code == 0
+
+    result = _invoke(
+        db_path, ["map", "--book", "Designing Data-Intensive Applications"]
+    )
+    assert result.exit_code == 0
+    assert "consensus" in result.output
+
+
 def test_standard_note_concept_limit_does_not_create_concepts(db_path: Path):
     result = _invoke(
         db_path,
@@ -447,6 +492,42 @@ def test_note_edit_wikilink_sync(db_path: Path, monkeypatch: pytest.MonkeyPatch)
     )
     conn.commit()
     conn.close()
+
+
+def test_note_edit_clears_book_concepts_from_wikilinks(
+    db_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    result = _invoke(db_path, ["add", "Designing Data-Intensive Applications"])
+    assert result.exit_code == 0
+
+    result = _invoke(
+        db_path,
+        ["note", "--book", "Designing Data-Intensive Applications", "See [[consensus]]."],
+    )
+    assert result.exit_code == 0
+
+    conn = connect(db_path)
+    note_id = conn.execute("SELECT id FROM notes ORDER BY id DESC LIMIT 1").fetchone()[
+        "id"
+    ]
+    linked = conn.execute(
+        "SELECT COUNT(*) AS count FROM book_concepts WHERE source_note_id = ?",
+        (note_id,),
+    ).fetchone()["count"]
+    conn.close()
+    assert linked == 1
+
+    monkeypatch.setattr(click, "edit", lambda _: "No concepts now.")
+    result = _invoke(db_path, ["note", "edit", str(note_id)])
+    assert result.exit_code == 0
+
+    conn = connect(db_path)
+    linked = conn.execute(
+        "SELECT COUNT(*) AS count FROM book_concepts WHERE source_note_id = ?",
+        (note_id,),
+    ).fetchone()["count"]
+    conn.close()
+    assert linked == 0
 
     monkeypatch.setattr(click, "edit", lambda _: "Updated with [[raft]].")
     result = _invoke(db_path, ["note", "edit", str(note_id)])
@@ -559,10 +640,23 @@ def test_toc_and_export_commands(db_path: Path):
         ],
     )
     assert result.exit_code == 0
+    result = _invoke(
+        db_path,
+        [
+            "toc",
+            "relevance",
+            "Designing Data-Intensive Applications",
+            "--chapter",
+            "1",
+            "Skim for core terms",
+        ],
+    )
+    assert result.exit_code == 0
 
     result = _invoke(db_path, ["toc", "Designing Data-Intensive Applications"])
     assert result.exit_code == 0
     assert "TOC for" in result.output
+    assert "Relevance" in result.output
 
     result = _invoke(db_path, ["concept", "link", "consensus", "--book", "Designing Data-Intensive Applications"])
     assert result.exit_code == 0
@@ -577,6 +671,10 @@ def test_toc_and_export_commands(db_path: Path):
     assert "concepts" in payload
 
     result = _invoke(db_path, ["export", "map", "--format", "dot"])
+    assert result.exit_code == 0
+    assert "digraph" in result.output
+
+    result = _invoke(db_path, ["export", "--format", "dot"])
     assert result.exit_code == 0
     assert "digraph" in result.output
 

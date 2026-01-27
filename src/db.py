@@ -172,6 +172,15 @@ MIGRATIONS: list[tuple[int, str]] = [
         ALTER TABLE chapters ADD COLUMN updated_at TEXT DEFAULT CURRENT_TIMESTAMP;
         """,
     ),
+    (
+        3,
+        """
+        ALTER TABLE book_concepts ADD COLUMN source_note_id INTEGER;
+
+        CREATE INDEX IF NOT EXISTS book_concepts_source_note_idx
+            ON book_concepts(source_note_id);
+        """,
+    ),
 ]
 
 

@@ -114,19 +114,35 @@ class GraphApp(App):
     def action_prev(self) -> None:
         if not self.node_ids:
             return
+        if self._should_exit_focus_for_navigation():
+            self._exit_focus_preserving_cursor()
         self.cursor = (self.cursor - 1) % len(self.node_ids)
         self._update_focus()
 
     def action_next(self) -> None:
         if not self.node_ids:
             return
+        if self._should_exit_focus_for_navigation():
+            self._exit_focus_preserving_cursor()
         self.cursor = (self.cursor + 1) % len(self.node_ids)
         self._update_focus()
 
     def action_toggle(self) -> None:
         if self.focus_graph is None:
             return
-        self.focus_mode = not self.focus_mode
+        node_id = self.node_ids[self.cursor] if self.node_ids else None
+        if node_id and self.focus_mode and node_id == self.focus_id:
+            self.focus_mode = False
+        elif node_id:
+            self.focus_graph = build_focus_graph_from_full(self.full_graph, node_id)
+            self.focus_mode = True
+            self.focus_id = node_id
+            self.focus_label = next(
+                (node.label for node in self.full_graph.nodes if node.node_id == node_id),
+                None,
+            )
+        else:
+            self.focus_mode = not self.focus_mode
         self.node_ids = [node.node_id for node in self.active_graph().nodes]
         self.cursor = 0
         self._update_focus(reset=True)
@@ -156,6 +172,20 @@ class GraphApp(App):
             info.update(f"Focus: {self.focus_label} (neighbors)")
         else:
             info.update("Focus: none")
+
+    def _should_exit_focus_for_navigation(self) -> bool:
+        if not self.focus_mode or self.focus_graph is None:
+            return False
+        return len(self.node_ids) <= 1 and len(self.full_graph.nodes) > 1
+
+    def _exit_focus_preserving_cursor(self) -> None:
+        current_id = self.node_ids[self.cursor] if self.node_ids else None
+        self.focus_mode = False
+        self.node_ids = [node.node_id for node in self.active_graph().nodes]
+        if current_id and current_id in self.node_ids:
+            self.cursor = self.node_ids.index(current_id)
+        else:
+            self.cursor = 0
 
 
 class GraphWidget(Widget):
@@ -334,6 +364,33 @@ def build_graph(conn: sqlite3.Connection, focus_id: str | None = None) -> Graph:
     }
 
     return Graph(nodes=list(nodes.values()), edges=filtered_edges)
+
+
+def build_focus_graph_from_full(full_graph: Graph, focus_id: str) -> Graph:
+    filtered_edges = [edge for edge in full_graph.edges if focus_id in edge]
+    connected = {node_id for edge in filtered_edges for node_id in edge}
+    connected.add(focus_id)
+    nodes = [node for node in full_graph.nodes if node.node_id in connected]
+
+    degree_counts: dict[str, int] = {node.node_id: 0 for node in nodes}
+    for a, b in filtered_edges:
+        if a in degree_counts:
+            degree_counts[a] += 1
+        if b in degree_counts:
+            degree_counts[b] += 1
+
+    nodes = [
+        Node(
+            node_id=node.node_id,
+            label=node.label,
+            kind=node.kind,
+            degree=degree_counts.get(node.node_id, 0),
+            depth=node.depth,
+        )
+        for node in nodes
+    ]
+
+    return Graph(nodes=nodes, edges=filtered_edges)
 
 
 def build_book_graph(

@@ -41,6 +41,7 @@ from src.viz import (
     GraphApp,
     Node,
     build_book_graph,
+    build_focus_graph_from_full,
     build_graph,
     compute_layout,
     draw_line,
@@ -103,6 +104,22 @@ def test_build_book_graph_includes_related(db_conn):
         {f"c{concept_alpha}", f"c{concept_beta}"} == set(edge)
         for edge in related_graph.edges
     )
+
+
+def test_build_focus_graph_from_full():
+    full_graph = Graph(
+        nodes=[
+            Node(node_id="c1", label="C1", kind="concept", degree=2, depth=None),
+            Node(node_id="c2", label="C2", kind="concept", degree=1, depth=None),
+            Node(node_id="b1", label="B1", kind="book", degree=1, depth="mapped"),
+        ],
+        edges=[("c1", "c2"), ("b1", "c1")],
+    )
+
+    focus_graph = build_focus_graph_from_full(full_graph, "c1")
+    focus_ids = {node.node_id for node in focus_graph.nodes}
+    assert focus_ids == {"c1", "c2", "b1"}
+    assert all("c1" in edge for edge in focus_graph.edges)
 
 
 def test_compute_layout_deterministic():
@@ -187,11 +204,12 @@ def test_graph_app_focus_toggle_and_cursor():
     assert app.active_graph() == focus_graph
     assert app.node_ids == ["c1"]
 
+    app.focus_mode = False
+    app.node_ids = [node.node_id for node in app.active_graph().nodes]
     app.action_toggle()
-    assert app.active_graph() == full_graph
-    assert app.node_ids == ["c1", "c2"]
+    assert app.node_ids == ["c1"]
     assert app.cursor == 0
-    assert widget.graph == full_graph
+    assert widget.graph == app.active_graph()
     assert widget.focus_id == "c1"
     assert widget.relayout_calls == 1
     assert info.value == "Focus: C1"

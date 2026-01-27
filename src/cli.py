@@ -888,12 +888,21 @@ def note(
         source="explicit",
     )
 
-    notes_lib.sync_wikilink_concepts(
+    wikilink_ids = notes_lib.sync_wikilink_concepts(
         conn,
         note_id=note_id,
         wikilink_names=wikilink_names,
         explicit_ids=set(explicit_ids),
     )
+    if book_id:
+        _link_book_concepts(
+            conn,
+            note_id=note_id,
+            book_id=book_id,
+            chapter_id=chapter_id,
+            location=source_location,
+            concept_ids=set(explicit_ids) | set(wikilink_ids),
+        )
     conn.commit()
     console.print(f"Added note #{note_id}.")
 
@@ -904,7 +913,7 @@ def note(
 def note_edit(ctx: click.Context, note_id: int) -> None:
     conn = ctx.obj["conn"]
     row = conn.execute(
-        "SELECT body, note_type FROM notes WHERE id = ?",
+        "SELECT body, note_type, book_id, chapter_id, source_location FROM notes WHERE id = ?",
         (note_id,),
     ).fetchone()
     if not row:
@@ -956,12 +965,21 @@ def note_edit(ctx: click.Context, note_id: int) -> None:
         (updated, note_id),
     )
 
-    notes_lib.sync_wikilink_concepts(
+    wikilink_ids = notes_lib.sync_wikilink_concepts(
         conn,
         note_id=note_id,
         wikilink_names=wikilink_names,
         explicit_ids=set(explicit_ids),
     )
+    if row["book_id"]:
+        _link_book_concepts(
+            conn,
+            note_id=note_id,
+            book_id=row["book_id"],
+            chapter_id=row["chapter_id"],
+            location=row["source_location"],
+            concept_ids=set(explicit_ids) | set(wikilink_ids),
+        )
     conn.commit()
     console.print(f"Updated note #{note_id}.")
 
@@ -1057,12 +1075,21 @@ def quote(
         concept_ids=explicit_ids,
         source="explicit",
     )
-    notes_lib.sync_wikilink_concepts(
+    wikilink_ids = notes_lib.sync_wikilink_concepts(
         conn,
         note_id=note_id,
         wikilink_names=wikilink_names,
         explicit_ids=set(explicit_ids),
     )
+    if book_id:
+        _link_book_concepts(
+            conn,
+            note_id=note_id,
+            book_id=book_id,
+            chapter_id=None,
+            location=source_location,
+            concept_ids=set(explicit_ids) | set(wikilink_ids),
+        )
     conn.commit()
     console.print(f"Added quote #{note_id}.")
 
@@ -1283,6 +1310,33 @@ def toc_summarize(
     console.print(f'Updated chapter {chapter_ref} summary for {resolved}.')
 
 
+@toc_cmd.command("relevance")
+@click.argument("book_title")
+@click.option("--chapter", "chapter_ref", required=True, help="Chapter number or id.")
+@click.argument("relevance")
+@click.pass_context
+def toc_relevance(
+    ctx: click.Context, book_title: str, chapter_ref: str, relevance: str
+) -> None:
+    conn = ctx.obj["conn"]
+    try:
+        book_id, resolved = resolve_book_id(conn, book_title)
+    except ResolutionError as exc:
+        raise click.ClickException(str(exc)) from exc
+
+    try:
+        chapter_id = toc.resolve_chapter_id(conn, book_id, chapter_ref)
+        conn.execute(
+            "UPDATE chapters SET relevance = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+            (relevance, chapter_id),
+        )
+        conn.commit()
+    except toc.TocError as exc:
+        raise click.ClickException(str(exc)) from exc
+
+    console.print(f'Updated chapter {chapter_ref} relevance for {resolved}.')
+
+
 @toc_cmd.command("show")
 @click.argument("book_title")
 @click.pass_context
@@ -1295,7 +1349,7 @@ def toc_show(ctx: click.Context, book_title: str) -> None:
 
     rows = conn.execute(
         """
-        SELECT number, title, page_start, page_end, summary
+        SELECT number, title, page_start, page_end, summary, relevance
         FROM chapters
         WHERE book_id = ?
         ORDER BY
@@ -1311,6 +1365,7 @@ def toc_show(ctx: click.Context, book_title: str) -> None:
     table.add_column("Title")
     table.add_column("Pages")
     table.add_column("Summary")
+    table.add_column("Relevance")
     for row in rows:
         if row["page_start"] and row["page_end"]:
             pages = f"{row['page_start']}-{row['page_end']}"
@@ -1323,12 +1378,29 @@ def toc_show(ctx: click.Context, book_title: str) -> None:
             row["title"],
             pages,
             row["summary"] or "",
+            row["relevance"] or "",
         )
     console.print(table)
 
-@cli.group(name="export")
-def export_cmd() -> None:
-    pass
+@cli.group(name="export", invoke_without_command=True)
+@click.option(
+    "--format",
+    "fmt",
+    type=click.Choice(["markdown", "json", "dot", "obsidian"], case_sensitive=False),
+    default="markdown",
+)
+@click.option(
+    "--output",
+    "output_dir",
+    type=click.Path(path_type=Path),
+    default=None,
+    help="Output directory for obsidian export.",
+)
+@click.pass_context
+def export_cmd(ctx: click.Context, fmt: str, output_dir: Path | None) -> None:
+    if ctx.invoked_subcommand is not None:
+        return
+    _export_map(ctx, fmt, output_dir)
 
 
 @export_cmd.command("map")
@@ -1347,6 +1419,10 @@ def export_cmd() -> None:
 )
 @click.pass_context
 def export_map(ctx: click.Context, fmt: str, output_dir: Path | None) -> None:
+    _export_map(ctx, fmt, output_dir)
+
+
+def _export_map(ctx: click.Context, fmt: str, output_dir: Path | None) -> None:
     conn = ctx.obj["conn"]
     fmt_lower = fmt.lower()
     if fmt_lower == "markdown":
@@ -1368,6 +1444,31 @@ def export_map(ctx: click.Context, fmt: str, output_dir: Path | None) -> None:
         console.print(f"Obsidian vault written to {output_path}.")
         return
     raise click.ClickException(f"Unsupported format: {fmt}")
+
+
+def _link_book_concepts(
+    conn: sqlite3.Connection,
+    *,
+    note_id: int,
+    book_id: int,
+    chapter_id: int | None,
+    location: str | None,
+    concept_ids: set[int],
+) -> None:
+    conn.execute(
+        "DELETE FROM book_concepts WHERE book_id = ? AND source_note_id = ?",
+        (book_id, note_id),
+    )
+    for concept_id in sorted(concept_ids):
+        conn.execute(
+            """
+            INSERT INTO book_concepts (
+                book_id, concept_id, chapter_id, location, notes, source_note_id
+            )
+            VALUES (?, ?, ?, ?, NULL, ?)
+            """,
+            (book_id, concept_id, chapter_id, location, note_id),
+        )
 
 
 def _map_overview(conn: Any) -> None:
