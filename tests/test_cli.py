@@ -225,6 +225,19 @@ def test_concept_commands_and_map(db_path: Path):
     assert "Related concepts" in result.output
 
 
+def test_concepts_orphan_excludes_note_links(db_path: Path):
+    result = _invoke(db_path, ["concept", "consensus"])
+    assert result.exit_code == 0
+
+    result = _invoke(db_path, ["note", "--concept", "consensus", "Note body."])
+    assert result.exit_code == 0
+
+    result = _invoke(db_path, ["concepts", "--orphan"])
+    assert result.exit_code == 0
+    assert "Orphan concepts" in result.output
+    assert "consensus" not in result.output
+
+
 def test_concept_link_missing_chapter(db_path: Path):
     result = _invoke(db_path, ["add", "Designing Data-Intensive Applications"])
     assert result.exit_code == 0

@@ -759,6 +759,7 @@ def list_concepts(ctx: click.Context, book_title: str | None, orphan: bool) -> N
                 SELECT 1 FROM concept_links cl
                 WHERE cl.from_concept_id = c.id OR cl.to_concept_id = c.id
               )
+              AND NOT EXISTS (SELECT 1 FROM note_concepts nc WHERE nc.concept_id = c.id)
             ORDER BY c.name
         """
         title = "Orphan concepts"
