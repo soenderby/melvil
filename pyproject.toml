@@ -9,6 +9,9 @@ dependencies = [
     "rich>=13.7.1",
 ]
 
+[project.scripts]
+melvil = "src.cli:cli"
+
 [dependency-groups]
 dev = [
     "pytest>=8.0.0",
