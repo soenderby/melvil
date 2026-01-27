@@ -128,8 +128,7 @@ def show(ctx: click.Context, title: str) -> None:
         JOIN concepts c ON c.id = bc.concept_id
         LEFT JOIN chapters ch ON ch.id = bc.chapter_id
         WHERE bc.book_id = ?
-        GROUP BY c.id
-        ORDER BY c.name
+        ORDER BY c.name, ch.number, bc.location
         """,
         (book_id,),
     ).fetchall()
@@ -1281,8 +1280,7 @@ def _map_book(conn: Any, book_title: str) -> None:
         JOIN concepts c ON c.id = bc.concept_id
         LEFT JOIN chapters ch ON ch.id = bc.chapter_id
         WHERE bc.book_id = ?
-        GROUP BY c.id
-        ORDER BY c.name
+        ORDER BY c.name, ch.number, bc.location
         """,
         (book_id,),
     ).fetchall()
