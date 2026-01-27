@@ -931,6 +931,27 @@ def quote(
         raise click.ClickException("Quote text is required.")
 
     conn = ctx.obj["conn"]
+    wikilink_names = notes_lib.parse_wikilinks(body)
+
+    explicit_ids: list[int] = []
+    for concept_name in concepts:
+        try:
+            explicit_ids.append(notes_lib.resolve_or_create_concept_id(conn, concept_name))
+        except ResolutionError as exc:
+            raise click.ClickException(str(exc)) from exc
+
+    wikilink_ids = set()
+    for concept_name in wikilink_names:
+        try:
+            wikilink_ids.add(notes_lib.resolve_or_create_concept_id(conn, concept_name))
+        except ResolutionError as exc:
+            raise click.ClickException(str(exc)) from exc
+
+    if len(set(explicit_ids) | wikilink_ids) > 1:
+        raise click.ClickException(
+            "Standard notes can link to at most one concept. Use --type relation."
+        )
+
     book_id = None
     if book_title:
         try:
@@ -948,13 +969,6 @@ def quote(
     )
     note_id = int(cursor.lastrowid)
 
-    explicit_ids: list[int] = []
-    for concept_name in concepts:
-        try:
-            explicit_ids.append(notes_lib.resolve_or_create_concept_id(conn, concept_name))
-        except ResolutionError as exc:
-            raise click.ClickException(str(exc)) from exc
-
     notes_lib.insert_note_concepts(
         conn,
         note_id=note_id,
@@ -964,7 +978,7 @@ def quote(
     notes_lib.sync_wikilink_concepts(
         conn,
         note_id=note_id,
-        wikilink_names=notes_lib.parse_wikilinks(body),
+        wikilink_names=wikilink_names,
         explicit_ids=set(explicit_ids),
     )
     conn.commit()
