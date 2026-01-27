@@ -365,6 +365,22 @@ def test_note_edit_standard_note_concept_limit(
     assert "Standard notes can link to at most one concept" in result.output
 
 
+def test_notes_search(db_path: Path):
+    result = _invoke(db_path, ["note", "Consensus note body."])
+    assert result.exit_code == 0
+    result = _invoke(db_path, ["note", "Availability note body."])
+    assert result.exit_code == 0
+
+    result = _invoke(db_path, ["notes", "search", "consensus"])
+    assert result.exit_code == 0
+    assert "Consensus note body." in result.output
+    assert "Availability note body." not in result.output
+
+    result = _invoke(db_path, ["notes", "search", '"consensus'])
+    assert result.exit_code != 0
+    assert "Invalid FTS query" in result.output
+
+
 def test_toc_and_export_commands(db_path: Path):
     result = _invoke(db_path, ["add", "Designing Data-Intensive Applications"])
     assert result.exit_code == 0
