@@ -2,7 +2,14 @@ from __future__ import annotations
 
 import pytest
 
-from src.toc import ChapterInput, TocError, add_chapter, parse_pages, resolve_chapter_id
+from src.toc import (
+    ChapterInput,
+    TocError,
+    add_chapter,
+    import_from_pdf,
+    parse_pages,
+    resolve_chapter_id,
+)
 
 
 def _add_book(conn, title: str) -> int:
@@ -62,3 +69,45 @@ def test_resolve_chapter_id_ambiguous_number(db_conn):
 
     with pytest.raises(TocError, match="Ambiguous chapter"):
         resolve_chapter_id(db_conn, book_id, "I")
+
+
+def test_import_from_pdf_toc(db_conn, tmp_path):
+    fitz = pytest.importorskip("fitz")
+    pdf_path = tmp_path / "toc.pdf"
+    doc = fitz.open()
+    doc.new_page()
+    doc.new_page()
+    doc.set_toc(
+        [
+            [1, "Chapter 1", 1],
+            [2, "Section 1.1", 1],
+            [1, "Chapter 2", 2],
+        ]
+    )
+    doc.save(pdf_path)
+    doc.close()
+
+    book_id = _add_book(db_conn, "Test Book")
+    inserted = import_from_pdf(db_conn, book_id, pdf_path)
+    assert inserted == 3
+
+    rows = db_conn.execute(
+        "SELECT id, title, parent_id FROM chapters WHERE book_id = ? ORDER BY position",
+        (book_id,),
+    ).fetchall()
+    titles = [row["title"] for row in rows]
+    assert titles == ["Chapter 1", "Section 1.1", "Chapter 2"]
+    assert rows[1]["parent_id"] == rows[0]["id"]
+
+
+def test_import_from_pdf_missing_outline(db_conn, tmp_path):
+    fitz = pytest.importorskip("fitz")
+    pdf_path = tmp_path / "no-outline.pdf"
+    doc = fitz.open()
+    doc.new_page()
+    doc.save(pdf_path)
+    doc.close()
+
+    book_id = _add_book(db_conn, "Test Book")
+    with pytest.raises(TocError, match="No PDF outline found"):
+        import_from_pdf(db_conn, book_id, pdf_path)
