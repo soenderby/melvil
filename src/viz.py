@@ -11,7 +11,7 @@ from textual.widgets import Footer, Header, Static
 from textual.widget import Widget
 from rich.text import Text
 
-from .resolve import ResolutionError, resolve_concept_id
+from .resolve import ResolutionError, resolve_book_id, resolve_concept_id
 
 
 @dataclass(frozen=True)
@@ -38,20 +38,37 @@ DEPTH_COLORS = {
 }
 
 
-def run_viz(conn: sqlite3.Connection, focus: str | None = None) -> None:
+def run_viz(
+    conn: sqlite3.Connection,
+    focus: str | None = None,
+    book: str | None = None,
+    include_related: bool = False,
+) -> None:
+    if focus and book:
+        raise ValueError("Use only one of focus or book.")
+
     full_graph = build_graph(conn)
     focus_graph = None
     focus_id = None
+    focus_label = None
     if focus:
         try:
             concept_id, resolved = resolve_concept_id(conn, focus)
         except ResolutionError as exc:
             raise ValueError(str(exc)) from exc
         focus_id = f"c{concept_id}"
+        focus_label = resolved
         focus_graph = build_graph(conn, focus_id=focus_id)
-        app = GraphApp(full_graph, focus_graph, focus_id, resolved)
-    else:
-        app = GraphApp(full_graph, None, None, None)
+    elif book:
+        try:
+            book_id, resolved = resolve_book_id(conn, book)
+        except ResolutionError as exc:
+            raise ValueError(str(exc)) from exc
+        focus_id = f"b{book_id}"
+        focus_label = resolved
+        focus_graph = build_book_graph(conn, book_id, include_related=include_related)
+
+    app = GraphApp(full_graph, focus_graph, focus_id, focus_label)
     app.run()
 
 
@@ -209,7 +226,7 @@ def node_style(node: Node) -> str:
     return "grey50"
 
 
-def build_graph(conn: sqlite3.Connection, focus_id: str | None = None) -> Graph:
+def _load_nodes_edges(conn: sqlite3.Connection) -> tuple[dict[str, Node], set[tuple[str, str]]]:
     nodes: dict[str, Node] = {}
     edges: set[tuple[str, str]] = set()
 
@@ -218,11 +235,23 @@ def build_graph(conn: sqlite3.Connection, focus_id: str | None = None) -> Graph:
 
     for row in concept_rows:
         node_id = f"c{row['id']}"
-        nodes[node_id] = Node(node_id=node_id, label=row["name"], kind="concept", degree=0, depth=None)
+        nodes[node_id] = Node(
+            node_id=node_id,
+            label=row["name"],
+            kind="concept",
+            degree=0,
+            depth=None,
+        )
 
     for row in book_rows:
         node_id = f"b{row['id']}"
-        nodes[node_id] = Node(node_id=node_id, label=row["title"], kind="book", degree=0, depth=row["depth"])
+        nodes[node_id] = Node(
+            node_id=node_id,
+            label=row["title"],
+            kind="book",
+            degree=0,
+            depth=row["depth"],
+        )
 
     link_rows = conn.execute(
         "SELECT from_concept_id, to_concept_id FROM concept_links"
@@ -240,6 +269,12 @@ def build_graph(conn: sqlite3.Connection, focus_id: str | None = None) -> Graph:
         b = f"c{row['concept_id']}"
         edges.add(tuple(sorted((a, b))))
 
+    return nodes, edges
+
+
+def build_graph(conn: sqlite3.Connection, focus_id: str | None = None) -> Graph:
+    nodes, edges = _load_nodes_edges(conn)
+
     filtered_edges = list(edges)
     if focus_id:
         filtered_edges = [edge for edge in edges if focus_id in edge]
@@ -249,6 +284,67 @@ def build_graph(conn: sqlite3.Connection, focus_id: str | None = None) -> Graph:
         connected.add(focus_id)
     if connected:
         nodes = {node_id: node for node_id, node in nodes.items() if node_id in connected}
+
+    degree_counts: dict[str, int] = {node_id: 0 for node_id in nodes}
+    for a, b in filtered_edges:
+        if a in degree_counts:
+            degree_counts[a] += 1
+        if b in degree_counts:
+            degree_counts[b] += 1
+
+    nodes = {
+        node_id: Node(
+            node_id=node.node_id,
+            label=node.label,
+            kind=node.kind,
+            degree=degree_counts.get(node_id, 0),
+            depth=node.depth,
+        )
+        for node_id, node in nodes.items()
+    }
+
+    return Graph(nodes=list(nodes.values()), edges=filtered_edges)
+
+
+def build_book_graph(
+    conn: sqlite3.Connection, book_id: int, include_related: bool = False
+) -> Graph:
+    nodes, edges = _load_nodes_edges(conn)
+    book_node = f"b{book_id}"
+
+    base_concepts = {
+        row["concept_id"]
+        for row in conn.execute(
+            "SELECT concept_id FROM book_concepts WHERE book_id = ?",
+            (book_id,),
+        ).fetchall()
+    }
+
+    related_concepts = set(base_concepts)
+    if include_related:
+        link_rows = conn.execute(
+            "SELECT from_concept_id, to_concept_id FROM concept_links"
+        ).fetchall()
+        for row in link_rows:
+            from_id = row["from_concept_id"]
+            to_id = row["to_concept_id"]
+            if from_id in base_concepts or to_id in base_concepts:
+                related_concepts.update({from_id, to_id})
+
+    allowed_nodes = {book_node} | {f"c{cid}" for cid in related_concepts}
+
+    filtered_edges: list[tuple[str, str]] = []
+    for a, b in edges:
+        if a == book_node or b == book_node:
+            other = b if a == book_node else a
+            if other.startswith("c") and int(other[1:]) in base_concepts:
+                filtered_edges.append((a, b))
+            continue
+        if a.startswith("c") and b.startswith("c"):
+            if a in allowed_nodes and b in allowed_nodes:
+                filtered_edges.append((a, b))
+
+    nodes = {node_id: node for node_id, node in nodes.items() if node_id in allowed_nodes}
 
     degree_counts: dict[str, int] = {node_id: 0 for node_id in nodes}
     for a, b in filtered_edges:

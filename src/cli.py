@@ -351,9 +351,25 @@ def map(
 
 @cli.command()
 @click.option("--focus", "focus_name", default=None, help="Focus on a concept.")
+@click.option("--book", "book_title", default=None, help="Focus on a book.")
+@click.option(
+    "--related",
+    "include_related",
+    is_flag=True,
+    help="Include related concepts when using --book.",
+)
 @click.pass_context
-def viz(ctx: click.Context, focus_name: str | None) -> None:
+def viz(
+    ctx: click.Context,
+    focus_name: str | None,
+    book_title: str | None,
+    include_related: bool,
+) -> None:
     conn = ctx.obj["conn"]
+    if focus_name and book_title:
+        raise click.ClickException("Use only one of --focus or --book.")
+    if include_related and not book_title:
+        raise click.ClickException("--related requires --book.")
     try:
         from src import viz as viz_module
     except ImportError as exc:
@@ -362,7 +378,12 @@ def viz(ctx: click.Context, focus_name: str | None) -> None:
         ) from exc
 
     try:
-        viz_module.run_viz(conn, focus_name)
+        viz_module.run_viz(
+            conn,
+            focus=focus_name,
+            book=book_title,
+            include_related=include_related,
+        )
     except ValueError as exc:
         raise click.ClickException(str(exc)) from exc
 

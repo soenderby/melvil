@@ -36,7 +36,7 @@ sys.modules.setdefault("textual.app", textual_app)
 sys.modules.setdefault("textual.widgets", textual_widgets)
 sys.modules.setdefault("textual.widget", textual_widget)
 
-from src.viz import Node, build_graph, compute_layout, draw_line, scale_positions
+from src.viz import Node, build_book_graph, build_graph, compute_layout, draw_line, scale_positions
 
 
 def _seed_graph_data(conn):
@@ -78,6 +78,22 @@ def test_build_graph_focus_and_degrees(db_conn):
     focus_ids = {node.node_id for node in focus_graph.nodes}
     assert focus_ids == {f"c{concept_alpha}", f"c{concept_beta}"}
     assert all(f"c{concept_beta}" in edge for edge in focus_graph.edges)
+
+
+def test_build_book_graph_includes_related(db_conn):
+    book_id, concept_alpha, concept_beta = _seed_graph_data(db_conn)
+
+    graph = build_book_graph(db_conn, book_id)
+    node_ids = {node.node_id for node in graph.nodes}
+    assert node_ids == {f"b{book_id}", f"c{concept_alpha}"}
+
+    related_graph = build_book_graph(db_conn, book_id, include_related=True)
+    related_ids = {node.node_id for node in related_graph.nodes}
+    assert related_ids == {f"b{book_id}", f"c{concept_alpha}", f"c{concept_beta}"}
+    assert any(
+        {f"c{concept_alpha}", f"c{concept_beta}"} == set(edge)
+        for edge in related_graph.edges
+    )
 
 
 def test_compute_layout_deterministic():
