@@ -16,6 +16,58 @@ from src.resolve import ResolutionError, resolve_book_id, resolve_concept_id
 console = Console()
 
 
+class FallbackGroup(click.Group):
+    """Allow treating unknown subcommands as extra args for invoke_without_command."""
+
+    def resolve_command(
+        self, ctx: click.Context, args: list[str]
+    ) -> tuple[str | None, click.Command | None, list[str]]:
+        if not args:
+            return None, None, []
+        cmd_name = click.utils.make_str(args[0])
+        original_cmd_name = cmd_name
+        cmd = self.get_command(ctx, cmd_name)
+        if cmd is None and ctx.token_normalize_func is not None:
+            cmd_name = ctx.token_normalize_func(cmd_name)
+            cmd = self.get_command(ctx, cmd_name)
+        if cmd is None:
+            return None, None, args
+        return original_cmd_name, cmd, args[1:]
+
+    def invoke(self, ctx: click.Context) -> Any:
+        def _process_result(value: Any) -> Any:
+            if self._result_callback is not None:
+                value = ctx.invoke(self._result_callback, value, **ctx.params)
+            return value
+
+        if not ctx._protected_args:
+            if self.invoke_without_command:
+                with ctx:
+                    rv = click.Command.invoke(self, ctx)
+                    return _process_result([] if self.chain else rv)
+            ctx.fail("Missing command.")
+
+        args = [*ctx._protected_args, *ctx.args]
+        ctx.args = []
+        ctx._protected_args = []
+
+        if not self.chain:
+            with ctx:
+                cmd_name, cmd, args = self.resolve_command(ctx, args)
+                if cmd is None:
+                    ctx.invoked_subcommand = None
+                    ctx.args = args
+                    rv = click.Command.invoke(self, ctx)
+                    return _process_result(rv)
+                ctx.invoked_subcommand = cmd_name
+                click.Command.invoke(self, ctx)
+                sub_ctx = cmd.make_context(cmd_name, args, parent=ctx)
+                with sub_ctx:
+                    return _process_result(sub_ctx.command.invoke(sub_ctx))
+
+        return super().invoke(ctx)
+
+
 @click.group()
 @click.option("--db", "db_path", default=None, help="Path to melvil.db.")
 @click.pass_context
@@ -40,7 +92,7 @@ def _format_authors(raw: str | None) -> str:
 
 
 def _render_book_concepts(title: str, rows: list[sqlite3.Row]) -> None:
-    table = Table(title=title)
+    table = Table(title=title, expand=True)
     table.add_column("Concept")
     table.add_column("Chapter")
     table.add_column("Location")
@@ -131,7 +183,8 @@ def show(ctx: click.Context, title: str) -> None:
     if not book:
         raise click.ClickException(f'Book "{title}" not found.')
 
-    table = Table(title=resolved)
+    console.print(resolved)
+    table = Table(title=resolved, expand=True)
     table.add_column("Field", style="bold")
     table.add_column("Value")
     table.add_row("Author", _format_authors(book["authors"]))
@@ -190,7 +243,7 @@ def list_books(ctx: click.Context, depth: str | None, concept_name: str | None) 
     rows = conn.execute(query, params).fetchall()
 
     table = Table(title="Books")
-    table.add_column("Title", style="bold")
+    table.add_column("Title", style="bold", no_wrap=True)
     table.add_column("Author")
     table.add_column("Year")
     table.add_column("Depth")
@@ -317,6 +370,7 @@ LINK_TYPES = {"related", "prerequisite", "contradicts", "specializes", "generali
 @cli.group(
     invoke_without_command=True,
     context_settings={"allow_extra_args": True, "ignore_unknown_options": True},
+    cls=FallbackGroup,
 )
 @click.option("--definition", default=None, help="Optional concept definition.")
 @click.pass_context
@@ -670,6 +724,7 @@ def list_concepts(ctx: click.Context, book_title: str | None, orphan: bool) -> N
 @cli.group(
     invoke_without_command=True,
     context_settings={"allow_extra_args": True, "ignore_unknown_options": True},
+    cls=FallbackGroup,
 )
 @click.option("--book", "book_title", default=None, help="Book title or alias.")
 @click.option("--chapter", "chapter_ref", default=None, help="Chapter number or id.")
@@ -1040,11 +1095,13 @@ def notes_search(ctx: click.Context, query: str) -> None:
     console.print(table)
 
 
-@cli.group(name="toc", invoke_without_command=True)
-@click.argument("book_title", required=False)
+@cli.group(name="toc", invoke_without_command=True, cls=FallbackGroup)
 @click.pass_context
-def toc_cmd(ctx: click.Context, book_title: str | None) -> None:
-    if ctx.invoked_subcommand or not book_title:
+def toc_cmd(ctx: click.Context) -> None:
+    if ctx.invoked_subcommand or not ctx.args:
+        return
+    book_title = " ".join(ctx.args).strip()
+    if not book_title:
         return
     ctx.invoke(toc_show, book_title=book_title)
 
@@ -1150,7 +1207,7 @@ def toc_show(ctx: click.Context, book_title: str) -> None:
         (book_id,),
     ).fetchall()
 
-    table = Table(title=f"TOC for {resolved}")
+    table = Table(title=f"TOC for {resolved}", expand=True)
     table.add_column("Number")
     table.add_column("Title")
     table.add_column("Pages")
