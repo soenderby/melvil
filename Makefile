@@ -1,15 +1,17 @@
 .PHONY: sync test lint format check
 
+UV_CACHE_DIR ?= /tmp/uv-cache
+
 sync:
-	uv sync --dev
+	UV_CACHE_DIR=$(UV_CACHE_DIR) uv sync --dev
 
 test:
-	uv run pytest
+	UV_CACHE_DIR=$(UV_CACHE_DIR) uv run pytest
 
 lint:
-	uv run ruff check .
+	UV_CACHE_DIR=$(UV_CACHE_DIR) uv run ruff check .
 
 format:
-	uv run ruff format .
+	UV_CACHE_DIR=$(UV_CACHE_DIR) uv run ruff format .
 
 check: format lint test
