@@ -149,6 +149,30 @@ def test_concept_commands_and_map(db_path: Path):
 
     result = _invoke(
         db_path,
+        ["toc", "add", "Designing Data-Intensive Applications", "--number", "2", "--title", "More"],
+    )
+    assert result.exit_code == 0
+
+    result = _invoke(
+        db_path,
+        [
+            "concept",
+            "link",
+            "consensus",
+            "--book",
+            "Designing Data-Intensive Applications",
+            "--chapter",
+            "2",
+            "--location",
+            "p.20",
+            "--note",
+            "Second mention",
+        ],
+    )
+    assert result.exit_code == 0
+
+    result = _invoke(
+        db_path,
         ["concept", "relate", "consensus", "linearizability", "--type", "related"],
     )
     assert result.exit_code == 0
@@ -177,6 +201,11 @@ def test_concept_commands_and_map(db_path: Path):
     result = _invoke(db_path, ["map", "--concept", "consensus"])
     assert result.exit_code == 0
     assert "Books covering" in result.output
+    assert result.output.count("Designing") == 1
+
+    result = _invoke(db_path, ["map", "--book", "Designing Data-Intensive Applications"])
+    assert result.exit_code == 0
+    assert result.output.count("consensus") == 1
 
     result = _invoke(db_path, ["map", "--book", "Designing Data-Intensive Applications"])
     assert result.exit_code == 0

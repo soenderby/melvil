@@ -1368,7 +1368,7 @@ def _map_concept(conn: Any, concept_name: str) -> None:
     concept_id, resolved = resolve_concept_id(conn, concept_name)
     rows = conn.execute(
         """
-        SELECT b.title, b.depth, ch.number, bc.location, bc.notes
+        SELECT b.id AS book_id, b.title, b.depth, ch.number, bc.location, bc.notes
         FROM book_concepts bc
         JOIN books b ON b.id = bc.book_id
         LEFT JOIN chapters ch ON ch.id = bc.chapter_id
@@ -1387,13 +1387,13 @@ def _map_concept(conn: Any, concept_name: str) -> None:
     table.add_column("Chapter")
     table.add_column("Location")
     table.add_column("Notes")
-    for row in rows:
+    for row in _aggregate_map_rows(rows, key="book_id", name="title", depth="depth"):
         table.add_row(
-            row["title"],
+            row["name"],
             row["depth"] or "",
-            row["number"] or "",
-            row["location"] or "",
-            row["notes"] or "",
+            row["number"],
+            row["location"],
+            row["notes"],
         )
     console.print(table)
 
@@ -1402,7 +1402,7 @@ def _map_book(conn: Any, book_title: str) -> None:
     book_id, resolved = resolve_book_id(conn, book_title)
     rows = conn.execute(
         """
-        SELECT c.name, ch.number, bc.location, bc.notes, bc.id AS mention_id
+        SELECT c.id AS concept_id, c.name, ch.number, bc.location, bc.notes, bc.id AS mention_id
         FROM book_concepts bc
         JOIN concepts c ON c.id = bc.concept_id
         LEFT JOIN chapters ch ON ch.id = bc.chapter_id
@@ -1416,7 +1416,8 @@ def _map_book(conn: Any, book_title: str) -> None:
         """,
         (book_id,),
     ).fetchall()
-    _render_book_concepts(f'Concepts in "{resolved}"', rows)
+    deduped = _aggregate_map_rows(rows, key="concept_id", name="name", depth=None)
+    _render_book_concepts(f'Concepts in "{resolved}"', deduped)
 
 
 def _map_related(conn: Any, related_name: str) -> None:
@@ -1437,6 +1438,50 @@ def _map_related(conn: Any, related_name: str) -> None:
     for row in rows:
         table.add_row(row["name"], row["link_type"])
     console.print(table)
+
+
+def _aggregate_map_rows(
+    rows: list[Any],
+    *,
+    key: str,
+    name: str,
+    depth: str | None,
+) -> list[dict[str, str | None]]:
+    def append_unique(values: list[str], value: str | None) -> None:
+        if not value:
+            return
+        if value in values:
+            return
+        values.append(value)
+
+    grouped: dict[Any, dict[str, Any]] = {}
+    for row in rows:
+        key_value = row[key]
+        if key_value not in grouped:
+            grouped[key_value] = {
+                "name": row[name],
+                "depth": row[depth] if depth else None,
+                "chapters": [],
+                "locations": [],
+                "notes": [],
+            }
+        entry = grouped[key_value]
+        append_unique(entry["chapters"], row["number"] or "")
+        append_unique(entry["locations"], row["location"] or "")
+        append_unique(entry["notes"], row["notes"] or "")
+
+    aggregated: list[dict[str, str | None]] = []
+    for entry in grouped.values():
+        aggregated.append(
+            {
+                "name": entry["name"],
+                "depth": entry["depth"],
+                "number": ", ".join(entry["chapters"]),
+                "location": ", ".join(entry["locations"]),
+                "notes": " | ".join(entry["notes"]),
+            }
+        )
+    return aggregated
 
 
 if __name__ == "__main__":
