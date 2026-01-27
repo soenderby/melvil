@@ -313,3 +313,81 @@ def test_toc_and_export_commands(db_path: Path):
     result = _invoke(db_path, ["export", "map", "--format", "dot"])
     assert result.exit_code == 0
     assert "digraph" in result.output
+
+
+def test_book_concept_mentions_show_all_and_ordered(db_path: Path):
+    result = _invoke(db_path, ["add", "Designing Data-Intensive Applications"])
+    assert result.exit_code == 0
+    result = _invoke(db_path, ["concept", "consensus"])
+    assert result.exit_code == 0
+    result = _invoke(
+        db_path,
+        [
+            "toc",
+            "add",
+            "Designing Data-Intensive Applications",
+            "--number",
+            "2",
+            "--title",
+            "Chapter Two",
+        ],
+    )
+    assert result.exit_code == 0
+    result = _invoke(
+        db_path,
+        [
+            "toc",
+            "add",
+            "Designing Data-Intensive Applications",
+            "--number",
+            "1",
+            "--title",
+            "Chapter One",
+        ],
+    )
+    assert result.exit_code == 0
+
+    result = _invoke(
+        db_path,
+        [
+            "concept",
+            "link",
+            "consensus",
+            "--book",
+            "Designing Data-Intensive Applications",
+            "--chapter",
+            "2",
+            "--location",
+            "p.20",
+        ],
+    )
+    assert result.exit_code == 0
+    result = _invoke(
+        db_path,
+        [
+            "concept",
+            "link",
+            "consensus",
+            "--book",
+            "Designing Data-Intensive Applications",
+            "--chapter",
+            "1",
+            "--location",
+            "p.10",
+        ],
+    )
+    assert result.exit_code == 0
+
+    result = _invoke(db_path, ["show", "Designing Data-Intensive Applications"])
+    assert result.exit_code == 0
+    assert "p.10" in result.output
+    assert "p.20" in result.output
+    assert result.output.index("p.10") < result.output.index("p.20")
+
+    result = _invoke(
+        db_path, ["map", "--book", "Designing Data-Intensive Applications"]
+    )
+    assert result.exit_code == 0
+    assert "p.10" in result.output
+    assert "p.20" in result.output
+    assert result.output.index("p.10") < result.output.index("p.20")
