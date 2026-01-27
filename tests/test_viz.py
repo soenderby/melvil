@@ -36,7 +36,16 @@ sys.modules.setdefault("textual.app", textual_app)
 sys.modules.setdefault("textual.widgets", textual_widgets)
 sys.modules.setdefault("textual.widget", textual_widget)
 
-from src.viz import Node, build_book_graph, build_graph, compute_layout, draw_line, scale_positions
+from src.viz import (
+    Graph,
+    GraphApp,
+    Node,
+    build_book_graph,
+    build_graph,
+    compute_layout,
+    draw_line,
+    scale_positions,
+)
 
 
 def _seed_graph_data(conn):
@@ -125,3 +134,69 @@ def test_draw_line_marks_grid():
     assert grid[0][0][0] == "."
     assert grid[4][4][0] == "."
     assert any(cell[0] == "." for row in grid for cell in row)
+
+
+class _DummyGraphWidget:
+    def __init__(self):
+        self.graph = None
+        self.focus_id = None
+        self.relayout_calls = 0
+
+    def set_graph(self, graph):
+        self.graph = graph
+
+    def set_focus(self, node_id):
+        self.focus_id = node_id
+
+    def relayout(self):
+        self.relayout_calls += 1
+
+
+class _DummyInfo:
+    def __init__(self):
+        self.value = None
+
+    def update(self, value):
+        self.value = value
+
+
+def test_graph_app_focus_toggle_and_cursor():
+    full_graph = Graph(
+        nodes=[
+            Node(node_id="c1", label="C1", kind="concept", degree=1, depth=None),
+            Node(node_id="c2", label="C2", kind="concept", degree=1, depth=None),
+        ],
+        edges=[],
+    )
+    focus_graph = Graph(
+        nodes=[Node(node_id="c1", label="C1", kind="concept", degree=1, depth=None)],
+        edges=[],
+    )
+
+    app = GraphApp(full_graph, focus_graph, focus_id="c1", focus_label="C1")
+    widget = _DummyGraphWidget()
+    info = _DummyInfo()
+
+    def _query_one(selector, *args, **kwargs):
+        if selector == "#info":
+            return info
+        return widget
+
+    app.query_one = _query_one  # type: ignore[assignment]
+
+    assert app.active_graph() == focus_graph
+    assert app.node_ids == ["c1"]
+
+    app.action_toggle()
+    assert app.active_graph() == full_graph
+    assert app.node_ids == ["c1", "c2"]
+    assert app.cursor == 0
+    assert widget.graph == full_graph
+    assert widget.focus_id == "c1"
+    assert widget.relayout_calls == 1
+    assert info.value == "Focus: C1"
+
+    app.action_next()
+    assert app.cursor == 1
+    assert widget.focus_id == "c2"
+    assert info.value == "Focus: C2"
