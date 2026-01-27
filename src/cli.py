@@ -201,7 +201,12 @@ def show(ctx: click.Context, title: str) -> None:
         JOIN concepts c ON c.id = bc.concept_id
         LEFT JOIN chapters ch ON ch.id = bc.chapter_id
         WHERE bc.book_id = ?
-        ORDER BY c.name, ch.number, bc.location, mention_id
+        ORDER BY
+            c.name,
+            (ch.position IS NULL AND ch.page_start IS NULL),
+            COALESCE(ch.position, ch.page_start),
+            bc.location,
+            mention_id
         """,
         (book_id,),
     ).fetchall()
@@ -425,7 +430,12 @@ def concept_mentions(ctx: click.Context, book_title: str) -> None:
         JOIN concepts c ON c.id = bc.concept_id
         LEFT JOIN chapters ch ON ch.id = bc.chapter_id
         WHERE bc.book_id = ?
-        ORDER BY c.name, ch.number, bc.location, mention_id
+        ORDER BY
+            c.name,
+            (ch.position IS NULL AND ch.page_start IS NULL),
+            COALESCE(ch.position, ch.page_start),
+            bc.location,
+            mention_id
         """,
         (book_id,),
     ).fetchall()
@@ -516,7 +526,11 @@ def concept_show(ctx: click.Context, name: str) -> None:
         JOIN books b ON b.id = bc.book_id
         LEFT JOIN chapters ch ON ch.id = bc.chapter_id
         WHERE bc.concept_id = ?
-        ORDER BY b.title
+        ORDER BY
+            b.title,
+            (ch.position IS NULL AND ch.page_start IS NULL),
+            COALESCE(ch.position, ch.page_start),
+            bc.location
         """,
         (concept_id,),
     ).fetchall()
@@ -1216,7 +1230,10 @@ def toc_show(ctx: click.Context, book_title: str) -> None:
         SELECT number, title, page_start, page_end, summary
         FROM chapters
         WHERE book_id = ?
-        ORDER BY position, id
+        ORDER BY
+            (position IS NULL AND page_start IS NULL),
+            COALESCE(position, page_start),
+            id
         """,
         (book_id,),
     ).fetchall()
@@ -1317,7 +1334,11 @@ def _map_concept(conn: Any, concept_name: str) -> None:
         JOIN books b ON b.id = bc.book_id
         LEFT JOIN chapters ch ON ch.id = bc.chapter_id
         WHERE bc.concept_id = ?
-        ORDER BY b.title
+        ORDER BY
+            b.title,
+            (ch.position IS NULL AND ch.page_start IS NULL),
+            COALESCE(ch.position, ch.page_start),
+            bc.location
         """,
         (concept_id,),
     ).fetchall()
@@ -1347,7 +1368,12 @@ def _map_book(conn: Any, book_title: str) -> None:
         JOIN concepts c ON c.id = bc.concept_id
         LEFT JOIN chapters ch ON ch.id = bc.chapter_id
         WHERE bc.book_id = ?
-        ORDER BY c.name, ch.number, bc.location, mention_id
+        ORDER BY
+            c.name,
+            (ch.position IS NULL AND ch.page_start IS NULL),
+            COALESCE(ch.position, ch.page_start),
+            bc.location,
+            mention_id
         """,
         (book_id,),
     ).fetchall()

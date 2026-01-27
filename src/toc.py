@@ -23,6 +23,16 @@ class ChapterInput:
 def add_chapter(
     conn: sqlite3.Connection, book_id: int, chapter: ChapterInput
 ) -> int:
+    position = chapter.position
+    if position is None:
+        if chapter.number and chapter.number.isdigit():
+            position = int(chapter.number)
+        else:
+            row = conn.execute(
+                "SELECT COALESCE(MAX(position), 0) AS max_position FROM chapters WHERE book_id = ?;",
+                (book_id,),
+            ).fetchone()
+            position = int(row["max_position"]) + 1
     cursor = conn.execute(
         """
         INSERT INTO chapters (
@@ -35,7 +45,7 @@ def add_chapter(
             chapter.number,
             chapter.title,
             chapter.parent_id,
-            chapter.position,
+            position,
             chapter.page_start,
             chapter.page_end,
         ),
