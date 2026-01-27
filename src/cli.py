@@ -39,6 +39,26 @@ def _format_authors(raw: str | None) -> str:
     return str(data)
 
 
+def _render_book_concepts(title: str, rows: list[sqlite3.Row]) -> None:
+    table = Table(title=title)
+    table.add_column("Concept")
+    table.add_column("Chapter")
+    table.add_column("Location")
+    table.add_column("Notes")
+    last_concept = None
+    for row in rows:
+        concept_name = row["name"]
+        display = concept_name if concept_name != last_concept else ""
+        table.add_row(
+            display,
+            row["number"] or "",
+            row["location"] or "",
+            row["notes"] or "",
+        )
+        last_concept = concept_name
+    console.print(table)
+
+
 @cli.command()
 @click.argument("title")
 @click.option("--author", "authors", multiple=True, help="Author name (repeatable).")
@@ -123,29 +143,17 @@ def show(ctx: click.Context, title: str) -> None:
 
     rows = conn.execute(
         """
-        SELECT c.name, ch.number, bc.location, bc.notes
+        SELECT c.name, ch.number, bc.location, bc.notes, bc.id AS mention_id
         FROM book_concepts bc
         JOIN concepts c ON c.id = bc.concept_id
         LEFT JOIN chapters ch ON ch.id = bc.chapter_id
         WHERE bc.book_id = ?
-        ORDER BY c.name, ch.number, bc.location
+        ORDER BY c.name, ch.number, bc.location, mention_id
         """,
         (book_id,),
     ).fetchall()
     if rows:
-        concept_table = Table(title="Concepts")
-        concept_table.add_column("Concept")
-        concept_table.add_column("Chapter")
-        concept_table.add_column("Location")
-        concept_table.add_column("Notes")
-        for row in rows:
-            concept_table.add_row(
-                row["name"],
-                row["number"] or "",
-                row["location"] or "",
-                row["notes"] or "",
-            )
-        console.print(concept_table)
+        _render_book_concepts("Concepts", rows)
 
 
 @cli.command(name="books")
@@ -358,29 +366,17 @@ def concept_mentions(ctx: click.Context, book_title: str) -> None:
 
     rows = conn.execute(
         """
-        SELECT c.name, ch.number, bc.location, bc.notes
+        SELECT c.name, ch.number, bc.location, bc.notes, bc.id AS mention_id
         FROM book_concepts bc
         JOIN concepts c ON c.id = bc.concept_id
         LEFT JOIN chapters ch ON ch.id = bc.chapter_id
         WHERE bc.book_id = ?
-        ORDER BY c.name
+        ORDER BY c.name, ch.number, bc.location, mention_id
         """,
         (book_id,),
     ).fetchall()
 
-    table = Table(title=f"Concept mentions for {resolved}")
-    table.add_column("Concept")
-    table.add_column("Chapter")
-    table.add_column("Location")
-    table.add_column("Notes")
-    for row in rows:
-        table.add_row(
-            row["name"],
-            row["number"] or "",
-            row["location"] or "",
-            row["notes"] or "",
-        )
-    console.print(table)
+    _render_book_concepts(f"Concept mentions for {resolved}", rows)
 
 
 @concept.command("show")
@@ -1275,28 +1271,16 @@ def _map_book(conn: Any, book_title: str) -> None:
     book_id, resolved = resolve_book_id(conn, book_title)
     rows = conn.execute(
         """
-        SELECT c.name, ch.number, bc.location, bc.notes
+        SELECT c.name, ch.number, bc.location, bc.notes, bc.id AS mention_id
         FROM book_concepts bc
         JOIN concepts c ON c.id = bc.concept_id
         LEFT JOIN chapters ch ON ch.id = bc.chapter_id
         WHERE bc.book_id = ?
-        ORDER BY c.name, ch.number, bc.location
+        ORDER BY c.name, ch.number, bc.location, mention_id
         """,
         (book_id,),
     ).fetchall()
-    table = Table(title=f'Concepts in "{resolved}"')
-    table.add_column("Concept")
-    table.add_column("Chapter")
-    table.add_column("Location")
-    table.add_column("Notes")
-    for row in rows:
-        table.add_row(
-            row["name"],
-            row["number"] or "",
-            row["location"] or "",
-            row["notes"] or "",
-        )
-    console.print(table)
+    _render_book_concepts(f'Concepts in "{resolved}"', rows)
 
 
 def _map_related(conn: Any, related_name: str) -> None:
