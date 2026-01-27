@@ -203,6 +203,8 @@ class GraphWidget(Widget):
             char = "@" if node.node_id == self.focus_id else "o"
             style = node_style(node)
             grid[y][x] = (char, style)
+            label = _short_label(node.label)
+            _place_label(grid, x, y, label, f"{style} bold")
 
         text = Text()
         for row in grid:
@@ -224,6 +226,34 @@ def node_style(node: Node) -> str:
     if node.degree >= 1:
         return "green"
     return "grey50"
+
+
+def _short_label(label: str, max_len: int = 12) -> str:
+    if len(label) <= max_len:
+        return label
+    return f"{label[: max_len - 3]}..."
+
+
+def _place_label(
+    grid: list[list[tuple[str, str | None]]],
+    x: int,
+    y: int,
+    label: str,
+    style: str | None,
+) -> None:
+    if not label:
+        return
+    width = len(grid[0]) if grid else 0
+    start = x + 2
+    if start + len(label) > width:
+        start = x - len(label) - 2
+    if start < 0 or start + len(label) > width:
+        return
+    for idx, char in enumerate(label):
+        col = start + idx
+        if grid[y][col][0] != " ":
+            continue
+        grid[y][col] = (char, style)
 
 
 def _load_nodes_edges(conn: sqlite3.Connection) -> tuple[dict[str, Node], set[tuple[str, str]]]:
