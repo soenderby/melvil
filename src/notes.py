@@ -3,7 +3,7 @@ from __future__ import annotations
 import re
 import sqlite3
 
-from .resolve import ResolutionNotFoundError, resolve_concept_id_exact
+from .resolve import ResolutionError, ResolutionNotFoundError, resolve_concept_id_exact
 
 WIKILINK_RE = re.compile(r"\[\[([^\[\]]+)\]\]")
 
@@ -33,6 +33,27 @@ def resolve_or_create_concept_id(conn: sqlite3.Connection, name: str) -> int:
             (name,),
         )
         return int(cursor.lastrowid)
+
+
+def resolve_concept_ids_without_create(
+    conn: sqlite3.Connection, names: list[str]
+) -> tuple[set[int], set[str]]:
+    resolved_ids: set[int] = set()
+    unresolved_names: set[str] = set()
+    for raw_name in names:
+        name = raw_name.strip()
+        if not name:
+            continue
+        try:
+            concept_id, _ = resolve_concept_id_exact(conn, name)
+        except ResolutionNotFoundError:
+            unresolved_names.add(name.lower())
+            continue
+        except ResolutionError:
+            raise
+        else:
+            resolved_ids.add(concept_id)
+    return resolved_ids, unresolved_names
 
 
 def insert_note_concepts(

@@ -359,6 +359,27 @@ def test_note_and_quote_commands(db_path: Path):
     assert "Notes" in result.output
 
 
+def test_standard_note_concept_limit_does_not_create_concepts(db_path: Path):
+    result = _invoke(
+        db_path,
+        [
+            "note",
+            "--concept",
+            "alpha",
+            "See [[beta]].",
+        ],
+    )
+    assert result.exit_code != 0
+    assert "Standard notes can link to at most one concept" in result.output
+
+    conn = connect(db_path)
+    concept_count = conn.execute("SELECT COUNT(*) AS count FROM concepts").fetchone()[
+        "count"
+    ]
+    conn.close()
+    assert concept_count == 0
+
+
 def test_note_edit_wikilink_sync(db_path: Path, monkeypatch: pytest.MonkeyPatch):
     result = _invoke(db_path, ["note", "See [[consensus]]."])
     assert result.exit_code == 0

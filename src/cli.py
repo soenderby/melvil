@@ -831,6 +831,18 @@ def note(
     wikilink_names = notes_lib.parse_wikilinks(text)
 
     conn = ctx.obj["conn"]
+    try:
+        resolved_ids, unresolved_names = notes_lib.resolve_concept_ids_without_create(
+            conn, list(concepts) + wikilink_names
+        )
+    except ResolutionError as exc:
+        raise click.ClickException(str(exc)) from exc
+
+    if note_type == "standard" and len(resolved_ids) + len(unresolved_names) > 1:
+        raise click.ClickException(
+            "Standard notes can link to at most one concept. Use --type relation."
+        )
+
     explicit_ids: list[int] = []
     for concept_name in concepts:
         try:
@@ -844,11 +856,6 @@ def note(
             wikilink_ids.add(notes_lib.resolve_or_create_concept_id(conn, concept_name))
         except ResolutionError as exc:
             raise click.ClickException(str(exc)) from exc
-
-    if note_type == "standard" and len(set(explicit_ids) | wikilink_ids) > 1:
-        raise click.ClickException(
-            "Standard notes can link to at most one concept. Use --type relation."
-        )
 
     book_id = None
     chapter_id = None
@@ -931,17 +938,26 @@ def note_edit(ctx: click.Context, note_id: int) -> None:
         ).fetchall()
     }
 
+    try:
+        resolved_ids, unresolved_names = notes_lib.resolve_concept_ids_without_create(
+            conn, wikilink_names
+        )
+    except ResolutionError as exc:
+        raise click.ClickException(str(exc)) from exc
+
+    if row["note_type"] == "standard" and (
+        len(explicit_ids | resolved_ids) + len(unresolved_names) > 1
+    ):
+        raise click.ClickException(
+            "Standard notes can link to at most one concept. Use --type relation."
+        )
+
     wikilink_ids = set()
     for concept_name in wikilink_names:
         try:
             wikilink_ids.add(notes_lib.resolve_or_create_concept_id(conn, concept_name))
         except ResolutionError as exc:
             raise click.ClickException(str(exc)) from exc
-
-    if row["note_type"] == "standard" and len(explicit_ids | wikilink_ids) > 1:
-        raise click.ClickException(
-            "Standard notes can link to at most one concept. Use --type relation."
-        )
 
     conn.execute(
         "UPDATE notes SET body = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
@@ -1000,6 +1016,18 @@ def quote(
     conn = ctx.obj["conn"]
     wikilink_names = notes_lib.parse_wikilinks(body)
 
+    try:
+        resolved_ids, unresolved_names = notes_lib.resolve_concept_ids_without_create(
+            conn, list(concepts) + wikilink_names
+        )
+    except ResolutionError as exc:
+        raise click.ClickException(str(exc)) from exc
+
+    if len(resolved_ids) + len(unresolved_names) > 1:
+        raise click.ClickException(
+            "Standard notes can link to at most one concept. Use --type relation."
+        )
+
     explicit_ids: list[int] = []
     for concept_name in concepts:
         try:
@@ -1013,11 +1041,6 @@ def quote(
             wikilink_ids.add(notes_lib.resolve_or_create_concept_id(conn, concept_name))
         except ResolutionError as exc:
             raise click.ClickException(str(exc)) from exc
-
-    if len(set(explicit_ids) | wikilink_ids) > 1:
-        raise click.ClickException(
-            "Standard notes can link to at most one concept. Use --type relation."
-        )
 
     book_id = None
     if book_title:
