@@ -152,6 +152,7 @@ melvil quote --book "DDIA" --location "p.324" "Exact quote..."
 4. Update SPEC_MVP.md schema section
 
 ### Testing
+- Run tests via the Makefile: `make test`
 - Unit tests for core logic
 - Integration tests for database operations
 - CLI tests using Click's CliRunner
