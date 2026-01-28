@@ -90,24 +90,39 @@ melvil export --format obsidian --output /path/to/vault
 
 ### Optional features
 
-Visualization and PDF TOC import require extras:
+Some features require optional dependencies. Install only what you need:
 
 ```bash
+# Visualization (Textual)
+uv sync --extra viz
+
+# PDF TOC import (PyMuPDF)
+uv sync --extra pdf
+
+# Or install both:
 uv sync --extra viz --extra pdf
 ```
 
-Or with pip:
+With pip:
 
 ```bash
+pip install ".[viz]"
+pip install ".[pdf]"
 pip install ".[viz,pdf]"
 ```
 
-Visualize:
+Visualization (requires `viz` extra):
 
 ```bash
 melvil viz
 melvil viz --focus "consensus"
 melvil viz --book "DDIA" --related
+```
+
+PDF TOC import (requires `pdf` extra):
+
+```bash
+melvil toc import "DDIA" --from-pdf /path/to/ddia.pdf
 ```
 
 Search notes:
